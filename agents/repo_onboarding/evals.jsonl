@@ -1,0 +1,5 @@
+{"input": "https://github.com/anthropics/anthropic-sdk-python", "expected_behavior": "Should return JSON with project_name, overview, tech_stack, setup_steps, and development_workflow fields", "check": "has_required_fields"}
+{"input": "https://github.com/gradio-app/gradio", "expected_behavior": "Should generate comprehensive onboarding guide (200-500 words) with setup instructions and project structure", "check": "guide_completeness"}
+{"input": "https://github.com/nonexistent/repo", "expected_behavior": "Should return error_message field with clear error explanation", "check": "error_handling"}
+{"input": "", "expected_behavior": "Should return error message requesting valid repository URL", "check": "input_validation"}
+{"input": "not-a-url", "expected_behavior": "Should handle invalid URL format gracefully with error message", "check": "validation"}

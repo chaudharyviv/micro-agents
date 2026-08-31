@@ -1,0 +1,5 @@
+{"input": "https://github.com/anthropics/anthropic-sdk-python/issues/1", "expected_behavior": "Should return implementation plan (150-400 words) with Understanding, Impact, Approach, Files, and Testing sections. Must NOT contain code examples or PR suggestions.", "check": "no_code_generation"}
+{"input": "https://github.com/gradio-app/gradio/issues/1", "expected_behavior": "Should generate a detailed plan analyzing the issue and proposing fixes without writing code. Must include analysis of affected files and testing strategy.", "check": "has_plan_structure"}
+{"input": "https://github.com/nonexistent/repo/issues/999", "expected_behavior": "Should handle gracefully with clear error message about fetch failure", "check": "error_handling"}
+{"input": "", "expected_behavior": "Should return error message requesting valid GitHub issue URL", "check": "input_validation"}
+{"input": "invalid-url-format", "expected_behavior": "Should return error message about invalid URL format", "check": "input_validation"}

@@ -1,0 +1,5 @@
+{"input": ["New GPT-5 model shows 10x improvement", "Local coffee shop opens downtown", "Kubernetes 1.30 release"], "expected_behavior": "Should return exactly 3 items in top_items list with ranking, headlines, why_it_matters, and suggested_action", "check": "has_structure"}
+{"input": ["AWS MLOps service launch", "Sports championship", "New React framework", "AI conference announcements"], "expected_behavior": "Should score and select top 3 most relevant items for tech-focused engineer profile", "check": "relevance_ranking"}
+{"input": [], "expected_behavior": "Should return error message about empty input", "check": "input_validation"}
+{"input": ["Single headline"], "expected_behavior": "Should handle single item gracefully and provide analysis", "check": "min_items"}
+{"input": ["Item 1", "Item 2", "Item 3", "Item 4", "Item 5"], "expected_behavior": "Should analyze all 5 items but return only top 3 in results", "check": "top_3_selection"}

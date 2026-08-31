@@ -1,0 +1,5 @@
+{"input": "torvalds", "expected_behavior": "Should analyze kernel developer and return skill_gaps, job_suggestions, and project_idea fields", "check": "has_structure"}
+{"input": "gvanrossum", "expected_behavior": "Should analyze Python creator and identify leadership/language design opportunities", "check": "analysis_completeness"}
+{"input": "", "expected_behavior": "Should return error message requesting username", "check": "input_validation"}
+{"input": "nonexistent_developer_xyz_12345", "expected_behavior": "Should handle gracefully and provide best-effort analysis or clear error", "check": "error_handling"}
+{"input": "github_user", "expected_behavior": "Should return structured opportunity analysis with skill gaps and project recommendations", "check": "opportunistic_insight"}

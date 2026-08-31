@@ -1,0 +1,5 @@
+{"input": "CVE-2024-1234", "expected_behavior": "Should return security assessment with severity, exploitability, and recommended actions", "check": "security_assessment"}
+{"input": "Log4Shell vulnerability", "expected_behavior": "Should analyze famous CVE and return impact assessment with clear recommendations", "check": "impact_assessment"}
+{"input": "Python 3.9 security", "expected_behavior": "Should search for Python security issues and return vulnerability analysis", "check": "search_based_analysis"}
+{"input": "", "expected_behavior": "Should return error message requesting CVE ID or software name", "check": "input_validation"}
+{"input": "invalid_cve_format", "expected_behavior": "Should attempt to search and provide best-effort analysis or clear error message", "check": "error_handling"}

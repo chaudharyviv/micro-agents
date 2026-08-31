@@ -1,0 +1,235 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg viewBox="0 0 1200 1400" xmlns="http://www.w3.org/2000/svg" style="background: #f8f9fa;">
+  <defs>
+    <style>
+      .title { font-size: 28px; font-weight: bold; fill: #1a1a1a; }
+      .section-title { font-size: 18px; font-weight: bold; fill: #2c3e50; }
+      .label { font-size: 14px; fill: #2c3e50; font-weight: 500; }
+      .sublabel { font-size: 12px; fill: #555; }
+      .box { fill: #fff; stroke: #2c3e50; stroke-width: 2; rx: 6; }
+      .box-primary { fill: #e8f4f8; stroke: #3498db; stroke-width: 2; }
+      .box-agent { fill: #fff3e0; stroke: #ff9800; stroke-width: 2; }
+      .box-api { fill: #f3e5f5; stroke: #9c27b0; stroke-width: 2; }
+      .box-external { fill: #e8f5e9; stroke: #4caf50; stroke-width: 2; }
+      .arrow { stroke: #34495e; stroke-width: 2; fill: none; marker-end: url(#arrowhead); }
+      .arrow-dashed { stroke: #bdc3c7; stroke-width: 2; fill: none; stroke-dasharray: 5,5; marker-end: url(#arrowhead-dashed); }
+      .legend-box { fill: #fff; stroke: #bdc3c7; stroke-width: 1; rx: 3; }
+      .text-center { text-anchor: middle; }
+      .text-small { font-size: 11px; }
+    </style>
+    <marker id="arrowhead" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
+      <polygon points="0 0, 10 3, 0 6" fill="#34495e" />
+    </marker>
+    <marker id="arrowhead-dashed" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
+      <polygon points="0 0, 10 3, 0 6" fill="#bdc3c7" />
+    </marker>
+  </defs>
+
+  <!-- Title -->
+  <text x="600" y="40" class="title text-center">Micro-Agents: System Architecture</text>
+
+  <!-- Layer 1: User Interface -->
+  <g id="ui-layer">
+    <text x="50" y="100" class="section-title">Layer 1: Web Interface</text>
+    <rect x="100" y="120" width="1000" height="80" class="box-primary" rx="8"/>
+    <text x="600" y="150" class="label text-center">Gradio Multi-Tab UI (app.py)</text>
+    <text x="600" y="170" class="sublabel text-center">Blog Scout | Repo Onboarding | CVE Impact | Issue Planner | Do I Care? | Opportunity Scout</text>
+  </g>
+
+  <!-- Arrow down -->
+  <path d="M 600 200 L 600 250" class="arrow"/>
+
+  <!-- Layer 2: Agent Layer -->
+  <g id="agent-layer">
+    <text x="50" y="250" class="section-title">Layer 2: Agent Layer (6 Specialized Agents)</text>
+
+    <!-- Row 1: Agents -->
+    <rect x="100" y="270" width="160" height="100" class="box-agent"/>
+    <text x="180" y="300" class="label text-center">Blog Scout</text>
+    <text x="180" y="325" class="sublabel text-center" style="font-size: 11px;">Level 1</text>
+    <text x="180" y="345" class="sublabel text-center" style="font-size: 10px;">Search + LLM</text>
+
+    <rect x="280" y="270" width="160" height="100" class="box-agent"/>
+    <text x="360" y="300" class="label text-center">Repo Onboarding</text>
+    <text x="360" y="325" class="sublabel text-center" style="font-size: 11px;">Level 3</text>
+    <text x="360" y="345" class="sublabel text-center" style="font-size: 10px;">Fixed Pipeline</text>
+
+    <rect x="460" y="270" width="160" height="100" class="box-agent"/>
+    <text x="540" y="300" class="label text-center">CVE Impact</text>
+    <text x="540" y="325" class="sublabel text-center" style="font-size: 11px;">Level 3</text>
+    <text x="540" y="345" class="sublabel text-center" style="font-size: 10px;">Search + Analysis</text>
+
+    <rect x="640" y="270" width="160" height="100" class="box-agent"/>
+    <text x="720" y="300" class="label text-center">Issue Planner</text>
+    <text x="720" y="325" class="sublabel text-center" style="font-size: 11px;">Level 4</text>
+    <text x="720" y="345" class="sublabel text-center" style="font-size: 10px;">ReAct + Guardrail</text>
+
+    <rect x="820" y="270" width="160" height="100" class="box-agent"/>
+    <text x="900" y="300" class="label text-center">Do I Care?</text>
+    <text x="900" y="325" class="sublabel text-center" style="font-size: 11px;">Level 5</text>
+    <text x="900" y="345" class="sublabel text-center" style="font-size: 10px;">Score & Filter</text>
+
+    <rect x="1000" y="270" width="100" height="100" class="box-agent"/>
+    <text x="1050" y="300" class="label text-center">Opp. Scout</text>
+    <text x="1050" y="325" class="sublabel text-center" style="font-size: 11px;">Level 5</text>
+    <text x="1050" y="345" class="sublabel text-center" style="font-size: 10px;">Analysis</text>
+  </g>
+
+  <!-- All agents arrow down -->
+  <path d="M 600 370 L 600 420" class="arrow"/>
+
+  <!-- Layer 3: Core API Layer -->
+  <g id="core-layer">
+    <text x="50" y="420" class="section-title">Layer 3: Core API Layer (Shared Modules)</text>
+
+    <rect x="100" y="440" width="220" height="90" class="box-primary"/>
+    <text x="210" y="470" class="label text-center">LLM API</text>
+    <text x="210" y="490" class="sublabel text-center">(core/llm.py)</text>
+    <text x="210" y="510" class="text-small text-center">Groq → HF Fallback</text>
+
+    <rect x="340" y="440" width="220" height="90" class="box-primary"/>
+    <text x="450" y="470" class="label text-center">Search API</text>
+    <text x="450" y="490" class="sublabel text-center">(core/search.py)</text>
+    <text x="450" y="510" class="text-small text-center">Tavily → DuckDuckGo</text>
+
+    <rect x="580" y="440" width="220" height="90" class="box-primary"/>
+    <text x="690" y="470" class="label text-center">GitHub Tool</text>
+    <text x="690" y="490" class="sublabel text-center">(core/github_tool.py)</text>
+    <text x="690" y="510" class="text-small text-center">Fetch repos, issues, PRs</text>
+
+    <rect x="820" y="440" width="180" height="90" class="box-primary"/>
+    <text x="910" y="470" class="label text-center">Agent Loop</text>
+    <text x="910" y="490" class="sublabel text-center">(core/agent.py)</text>
+    <text x="910" y="510" class="text-small text-center">ReAct pattern, max 4</text>
+  </g>
+
+  <!-- Core API arrows down -->
+  <path d="M 210 530 L 210 580" class="arrow"/>
+  <path d="M 450 530 L 450 580" class="arrow"/>
+  <path d="M 690 530 L 690 580" class="arrow"/>
+  <path d="M 910 530 L 910 580" class="arrow"/>
+
+  <!-- Layer 4: External APIs -->
+  <g id="api-layer">
+    <text x="50" y="580" class="section-title">Layer 4: External APIs (with Fallbacks)</text>
+
+    <!-- Primary APIs -->
+    <rect x="100" y="600" width="180" height="100" class="box-external"/>
+    <text x="190" y="630" class="label text-center">Groq API</text>
+    <text x="190" y="655" class="text-small text-center">Primary LLM</text>
+    <text x="190" y="672" class="text-small text-center">Rate: 30 req/min</text>
+    <text x="190" y="689" class="text-small text-center">Free tier</text>
+
+    <rect x="300" y="600" width="180" height="100" class="box-external"/>
+    <text x="390" y="630" class="label text-center">Tavily API</text>
+    <text x="390" y="655" class="text-small text-center">Primary Search</text>
+    <text x="390" y="672" class="text-small text-center">1000/month free</text>
+    <text x="390" y="689" class="text-small text-center">AI summaries</text>
+
+    <rect x="500" y="600" width="180" height="100" class="box-external"/>
+    <text x="590" y="630" class="label text-center">GitHub API</text>
+    <text x="590" y="655" class="text-small text-center">Read-only</text>
+    <text x="590" y="672" class="text-small text-center">60-5000 req/hr</text>
+    <text x="590" y="689" class="text-small text-center">No auth required</text>
+
+    <!-- Fallback APIs (with dashed lines) -->
+    <rect x="700" y="600" width="180" height="100" class="box-external" style="opacity: 0.7;"/>
+    <text x="790" y="630" class="label text-center">HF Inference</text>
+    <text x="790" y="655" class="text-small text-center">Fallback LLM</text>
+    <text x="790" y="672" class="text-small text-center">Free tier</text>
+    <text x="790" y="689" class="text-small text-center">slower but reliable</text>
+
+    <rect x="900" y="600" width="180" height="100" class="box-external" style="opacity: 0.7;"/>
+    <text x="990" y="630" class="label text-center">DuckDuckGo</text>
+    <text x="990" y="655" class="text-small text-center">Fallback Search</text>
+    <text x="990" y="672" class="text-small text-center">No key required</text>
+    <text x="990" y="689" class="text-small text-center">Unlimited queries</text>
+  </g>
+
+  <!-- Dashed arrows for fallbacks -->
+  <path d="M 190 700 L 790 700" class="arrow-dashed"/>
+  <path d="M 390 700 L 990 700" class="arrow-dashed"/>
+
+  <!-- Data Flow Example Section -->
+  <g id="data-flow">
+    <rect x="50" y="760" width="1100" height="480" class="legend-box"/>
+
+    <text x="600" y="790" class="section-title text-center">Data Flow Example: Blog Scout Agent</text>
+
+    <!-- Flow steps -->
+    <g id="flow-step-1">
+      <rect x="100" y="820" width="200" height="60" class="box"/>
+      <text x="200" y="850" class="label text-center">User Input</text>
+      <text x="200" y="870" class="sublabel text-center">"machine learning"</text>
+    </g>
+    <path d="M 200 880 L 200 920" class="arrow"/>
+
+    <g id="flow-step-2">
+      <rect x="100" y="920" width="200" height="60" class="box-primary"/>
+      <text x="200" y="950" class="label text-center">core/search.py</text>
+      <text x="200" y="970" class="sublabel text-center">Search for topic</text>
+    </g>
+    <path d="M 200 980 L 200 1020" class="arrow"/>
+
+    <g id="flow-step-3">
+      <rect x="100" y="1020" width="200" height="60" class="box-external"/>
+      <text x="200" y="1050" class="label text-center">Tavily API</text>
+      <text x="200" y="1070" class="sublabel text-center">Returns results</text>
+    </g>
+    <path d="M 300 1050 L 380 1050" class="arrow"/>
+
+    <g id="flow-step-4">
+      <rect x="380" y="1020" width="200" height="60" class="box-primary"/>
+      <text x="480" y="1050" class="label text-center">core/llm.py</text>
+      <text x="480" y="1070" class="sublabel text-center">Analyze results</text>
+    </g>
+    <path d="M 480 1020 L 480 980" class="arrow"/>
+
+    <g id="flow-step-5">
+      <rect x="380" y="920" width="200" height="60" class="box-external"/>
+      <text x="480" y="950" class="label text-center">Groq API</text>
+      <text x="480" y="970" class="sublabel text-center">LLM inference</text>
+    </g>
+    <path d="M 580 950 L 660 950" class="arrow"/>
+
+    <g id="flow-step-6">
+      <rect x="660" y="920" width="200" height="60" class="box"/>
+      <text x="760" y="950" class="label text-center">Format Output</text>
+      <text x="760" y="970" class="sublabel text-center">5 blog ideas</text>
+    </g>
+    <path d="M 760 920 L 760 880" class="arrow"/>
+
+    <g id="flow-step-7">
+      <rect x="660" y="820" width="200" height="60" class="box"/>
+      <text x="760" y="850" class="label text-center">Return to UI</text>
+      <text x="760" y="870" class="sublabel text-center">Display results</text>
+    </g>
+
+    <!-- Error flow annotation -->
+    <g id="error-flow">
+      <text x="900" y="1000" class="sublabel" style="font-style: italic;">Fallback flow if Tavily fails:</text>
+      <path d="M 380 1050 L 850 1050 L 850 1070" class="arrow-dashed"/>
+      <rect x="800" y="1070" width="150" height="40" class="box-external" style="opacity: 0.6;"/>
+      <text x="875" y="1095" class="text-small text-center">DuckDuckGo search</text>
+    </g>
+
+    <!-- Key characteristics -->
+    <g id="characteristics">
+      <text x="100" y="1180" class="sublabel" style="font-weight: bold;">Key Characteristics:</text>
+      <text x="100" y="1205" class="text-small">✓ Total time: 5-10 seconds (search 1-3s + LLM 1-5s + formatting 1s)</text>
+      <text x="100" y="1225" class="text-small">✓ Graceful fallback: If Tavily fails, uses DuckDuckGo automatically</text>
+      <text x="100" y="1245" class="text-small">✓ No state: Each run is independent, no caching or persistence</text>
+      <text x="100" y="1265" class="text-small">✓ No framework: Pure Python functions, easy to debug</text>
+    </g>
+  </g>
+
+  <!-- Footer: Key Statistics -->
+  <g id="footer">
+    <rect x="50" y="1280" width="1100" height="100" class="legend-box"/>
+
+    <text x="600" y="1310" class="label text-center">System Statistics</text>
+
+    <text x="150" y="1345" class="text-small">📊 6 agents | 4 core APIs | 5 external services | 1 Gradio UI | ~3000 lines of code</text>
+    <text x="150" y="1365" class="text-small">⚡ Speed: 5-30s per agent run | 💾 No database | 🔒 No hardcoded secrets | 🚀 Deploy in 1 command</text>
+  </g>
+</svg>

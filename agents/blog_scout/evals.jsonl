@@ -1,0 +1,5 @@
+{"input": null, "expected_behavior": "Should search default topics (GitHub trending, AI agents, platform engineering) and return 3-5 blog ideas with valid source URLs", "check": "min_count"}
+{"input": "", "expected_behavior": "Empty topic should be treated as None and search default topics, returning 3-5 ideas with real source URLs", "check": "min_count"}
+{"input": "Rust programming language", "expected_behavior": "Should search for Rust content and return 3-5 blog ideas, each with source_url matching a search result", "check": "has_source_url"}
+{"input": "machine learning", "expected_behavior": "Should return 3-5 blog ideas with valid https:// URLs from actual search results", "check": "has_source_url"}
+{"input": "nonexistent_topic_xyz_12345", "expected_behavior": "Should still return something - either real ideas if search succeeds or fallback error dict explaining the issue", "check": "manual"}
