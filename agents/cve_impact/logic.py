@@ -9,9 +9,9 @@ from typing import Optional
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
-from core.github_tool import fetch_repo
+from core.github_tool import fetch_repo, GitHubAPIError
 from core.search import web_search
-from core.llm import call_llm
+from core.llm import call_llm, LLMUnavailableError
 from agents.cve_impact.prompts import (
     SYSTEM_PROMPT,
     USER_PROMPT_TEMPLATE,
@@ -46,12 +46,12 @@ def analyze_cve_impact(repo_url: str) -> dict:
     try:
         repo_data = fetch_repo(repo_url)
         logger.info(f"Fetched repo: {repo_data.get('name', 'Unknown')}")
-    except Exception as e:
+    except GitHubAPIError as e:
         logger.error(f"Failed to fetch repo: {e}")
-        return {
-            "error_message": f"Failed to fetch repository: {str(e)[:100]}",
-            "repo_url": repo_url,
-        }
+        return {"error_message": str(e), "repo_url": repo_url}
+    except Exception as e:
+        logger.error(f"Unexpected error fetching repo: {e}")
+        return {"error_message": "Failed to fetch repository. Please try again.", "repo_url": repo_url}
 
     # Extract dependencies from repo data
     repo_name = repo_data.get("name", "Unknown")
@@ -89,12 +89,12 @@ def analyze_cve_impact(repo_url: str) -> dict:
     try:
         llm_response = call_llm(user_prompt, system=SYSTEM_PROMPT)
         logger.info(f"LLM response: {llm_response[:100]}...")
-    except Exception as e:
+    except LLMUnavailableError as e:
         logger.error(f"LLM call failed: {e}")
-        return {
-            "error_message": f"LLM service unavailable: {str(e)[:100]}",
-            "repo_url": repo_url,
-        }
+        return {"error_message": str(e), "repo_url": repo_url}
+    except Exception as e:
+        logger.error(f"Unexpected LLM error: {e}")
+        return {"error_message": "LLM service unavailable. Please try again.", "repo_url": repo_url}
 
     # Parse LLM response
     analysis = _parse_analysis(llm_response, repo_url)

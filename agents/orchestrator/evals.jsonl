@@ -1,0 +1,5 @@
+{"input": "Review https://github.com/anthropics/anthropic-sdk-python for onboarding and security risks", "expected_behavior": "Should route to security_audit (or repo_onboarding + cve_impact) and produce a synthesized Markdown report mentioning the repo", "check": "has_report"}
+{"input": "Suggest blog post ideas about Rust programming", "expected_behavior": "Should route to blog_scout and produce a report containing blog ideas", "check": "has_report"}
+{"input": "What should GitHub user torvalds work on to advance their career?", "expected_behavior": "Should route to opportunity_scout and produce a report on skill gaps and opportunities", "check": "has_report"}
+{"input": "", "expected_behavior": "Empty task should return an error_message instead of crashing", "check": "input_validation"}
+{"input": "asdkfjasdlkfj random gibberish task with no clear intent", "expected_behavior": "Should still pick a best-guess specialist and return a report, or a clear error_message - must not crash", "check": "manual"}

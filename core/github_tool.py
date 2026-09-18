@@ -1,18 +1,82 @@
 """GitHub interaction tools for micro-agents."""
 
+import logging
 import os
 import re
+import time
 import requests
 from dotenv import load_dotenv
 
+logger = logging.getLogger(__name__)
+
 
 GITHUB_API_BASE = "https://api.github.com"
+
+# GitHub's own rate limit is shared across every visitor of a deployed instance when GITHUB_TOKEN
+# isn't set (60 req/hr unauthenticated). This process-wide state tracks the last known budget from
+# response headers so we can fail fast with a clear message instead of burning through it silently
+# mid-request and surfacing a confusing 403 partway through a multi-call fetch.
+_rate_limit_state = {"remaining": None, "reset_at": None}
+_RATE_LIMIT_FLOOR = 2
+
+# This app only ever reads from GitHub (repo metadata, README, file listing, issues, PRs). A token
+# with broader scopes than recommended (`public_repo`, read-only) is more powerful than this app
+# needs, so if one is misconfigured we want a visible warning rather than silent over-privilege.
+_EXPECTED_TOKEN_SCOPES = {"public_repo", ""}
+_token_scope_checked = False
 
 
 class GitHubAPIError(Exception):
     """Raised when GitHub API returns an error."""
 
     pass
+
+
+def _check_rate_limit_budget() -> None:
+    """Raise early if the last known GitHub rate limit budget is nearly exhausted."""
+    remaining = _rate_limit_state.get("remaining")
+    reset_at = _rate_limit_state.get("reset_at")
+    if remaining is not None and remaining <= _RATE_LIMIT_FLOOR and reset_at and time.time() < reset_at:
+        wait_s = int(reset_at - time.time())
+        raise GitHubAPIError(
+            f"GitHub rate limit nearly exhausted ({remaining} requests left); resets in {wait_s}s. "
+            "Set GITHUB_TOKEN for a much higher limit, or try again later."
+        )
+
+
+def _record_rate_limit(resp: requests.Response) -> None:
+    """Cache the rate limit budget reported by GitHub on this response, if present."""
+    try:
+        remaining = resp.headers.get("X-RateLimit-Remaining")
+        reset = resp.headers.get("X-RateLimit-Reset")
+        if remaining is not None:
+            _rate_limit_state["remaining"] = int(remaining)
+        if reset is not None:
+            _rate_limit_state["reset_at"] = int(reset)
+    except (TypeError, ValueError):
+        pass
+
+    _warn_if_token_overscoped(resp)
+
+
+def _warn_if_token_overscoped(resp: requests.Response) -> None:
+    """Log a one-time warning if GITHUB_TOKEN reports scopes broader than read-only public_repo."""
+    global _token_scope_checked
+    if _token_scope_checked:
+        return
+
+    scopes_header = resp.headers.get("X-OAuth-Scopes")
+    if scopes_header is None:
+        return  # No token used, or a fine-grained PAT that doesn't report classic scopes here
+
+    _token_scope_checked = True
+    scopes = {s.strip() for s in scopes_header.split(",")}
+    if not scopes.issubset(_EXPECTED_TOKEN_SCOPES):
+        logger.warning(
+            f"GITHUB_TOKEN has scopes {sorted(scopes)}, broader than the recommended read-only "
+            "'public_repo' scope. Consider issuing a token scoped to public_repo (or a fine-grained "
+            "PAT with read-only repository access) instead."
+        )
 
 
 def _get_headers() -> dict:
@@ -68,11 +132,13 @@ def fetch_repo(url: str) -> dict:
     """
     owner, repo = _parse_repo_url(url)
     headers = _get_headers()
+    _check_rate_limit_budget()
 
     try:
         # Fetch repo metadata
         repo_url = f"{GITHUB_API_BASE}/repos/{owner}/{repo}"
         resp = requests.get(repo_url, headers=headers, timeout=10)
+        _record_rate_limit(resp)
         resp.raise_for_status()
         repo_data = resp.json()
 
@@ -121,9 +187,11 @@ def fetch_repo(url: str) -> dict:
             raise GitHubAPIError(f"Repository not found: {url}")
         elif e.response.status_code == 403:
             raise GitHubAPIError("GitHub rate limit exceeded")
-        raise GitHubAPIError(f"GitHub API error: {e}")
+        logger.error(f"GitHub API error fetching repo: {e}")
+        raise GitHubAPIError("GitHub API error. Please try again.")
     except Exception as e:
-        raise GitHubAPIError(f"Failed to fetch repository: {e}")
+        logger.error(f"Unexpected error fetching repo: {e}")
+        raise GitHubAPIError("Failed to fetch repository. Please try again.")
 
 
 def fetch_issue(url: str) -> dict:
@@ -141,10 +209,12 @@ def fetch_issue(url: str) -> dict:
     """
     owner, repo, issue_num = _parse_issue_url(url)
     headers = _get_headers()
+    _check_rate_limit_budget()
 
     try:
         issue_url = f"{GITHUB_API_BASE}/repos/{owner}/{repo}/issues/{issue_num}"
         resp = requests.get(issue_url, headers=headers, timeout=10)
+        _record_rate_limit(resp)
         resp.raise_for_status()
         issue_data = resp.json()
 
@@ -161,9 +231,11 @@ def fetch_issue(url: str) -> dict:
             raise GitHubAPIError(f"Issue not found: {url}")
         elif e.response.status_code == 403:
             raise GitHubAPIError("GitHub rate limit exceeded")
-        raise GitHubAPIError(f"GitHub API error: {e}")
+        logger.error(f"GitHub API error fetching issue: {e}")
+        raise GitHubAPIError("GitHub API error. Please try again.")
     except Exception as e:
-        raise GitHubAPIError(f"Failed to fetch issue: {e}")
+        logger.error(f"Unexpected error fetching issue: {e}")
+        raise GitHubAPIError("Failed to fetch issue. Please try again.")
 
 
 def fetch_pr(url: str) -> dict:
@@ -183,10 +255,12 @@ def fetch_pr(url: str) -> dict:
     """
     owner, repo, pr_num = _parse_pr_url(url)
     headers = _get_headers()
+    _check_rate_limit_budget()
 
     try:
         pr_url = f"{GITHUB_API_BASE}/repos/{owner}/{repo}/pulls/{pr_num}"
         resp = requests.get(pr_url, headers=headers, timeout=10)
+        _record_rate_limit(resp)
         resp.raise_for_status()
         pr_data = resp.json()
 
@@ -223,9 +297,11 @@ def fetch_pr(url: str) -> dict:
             raise GitHubAPIError(f"Pull request not found: {url}")
         elif e.response.status_code == 403:
             raise GitHubAPIError("GitHub rate limit exceeded")
-        raise GitHubAPIError(f"GitHub API error: {e}")
+        logger.error(f"GitHub API error fetching PR: {e}")
+        raise GitHubAPIError("GitHub API error. Please try again.")
     except Exception as e:
-        raise GitHubAPIError(f"Failed to fetch pull request: {e}")
+        logger.error(f"Unexpected error fetching PR: {e}")
+        raise GitHubAPIError("Failed to fetch pull request. Please try again.")
 
 
 if __name__ == "__main__":

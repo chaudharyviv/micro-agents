@@ -1,164 +1,146 @@
-"""Simple memory system for storing and retrieving agent results."""
+"""
+Agent memory: in-process only, bounded, and safe on shared/ephemeral hosts (e.g. Streamlit Cloud).
+
+Two tiers, deliberately kept separate:
+- SessionMemory: one visitor's own run history (short-term memory). Never shared between users.
+- ResultCache: a shared, TTL'd, size-capped cache of results derived purely from *public* data
+  (a GitHub repo/issue URL), so repeat runs are instant and don't burn GitHub/OpenAI quota.
+
+Nothing touches the filesystem: the host's disk is shared by all visitors and wiped on restart.
+"""
 
 import json
-import logging
-from pathlib import Path
-from datetime import datetime
-from typing import Optional
+import threading
+import time
+from collections import OrderedDict
+from typing import Any, Callable, Optional
 
-logger = logging.getLogger(__name__)
-
-# Memory storage directory
-MEMORY_DIR = Path(__file__).parent.parent / "memory"
-MEMORY_DIR.mkdir(exist_ok=True)
-
-# Database files
-ANALYSES_FILE = MEMORY_DIR / "analyses.jsonl"
-HISTORY_FILE = MEMORY_DIR / "history.json"
+# Only agents whose output depends solely on a public URL are safe to share across visitors.
+CACHEABLE_AGENTS = {"repo_onboarding", "cve_impact", "security_audit", "issue_fix_planner"}
 
 
-def store_result(agent_name: str, repo_url: str, result: dict) -> str:
-    """
-    Store an agent result to memory.
-
-    Args:
-        agent_name: Name of the agent (e.g., "blog_scout", "repo_onboarding")
-        repo_url: Repository URL analyzed (if applicable)
-        result: The result dict to store
-
-    Returns:
-        ID of the stored result
-    """
-    try:
-        # Create a record with metadata
-        record = {
-            "id": f"{agent_name}_{int(datetime.now().timestamp()*1000)}",
-            "agent": agent_name,
-            "repo_url": repo_url,
-            "timestamp": datetime.now().isoformat(),
-            "result": result,
-        }
-
-        # Append to JSONL file
-        with open(ANALYSES_FILE, "a") as f:
-            f.write(json.dumps(record) + "\n")
-
-        logger.info(f"Stored result: {record['id']}")
-        return record["id"]
-
-    except Exception as e:
-        logger.error(f"Failed to store result: {e}")
-        return None
+def normalize_input(text: str) -> str:
+    """Canonical form for cache/recall matching: trimmed, lower-cased, no trailing slash or .git."""
+    text = (text or "").strip().lower().rstrip("/")
+    return text[:-4] if text.endswith(".git") else text
 
 
-def retrieve_result(result_id: str) -> Optional[dict]:
-    """
-    Retrieve a stored result by ID.
-
-    Args:
-        result_id: ID of the result to retrieve
-
-    Returns:
-        The result dict, or None if not found
-    """
-    try:
-        if not ANALYSES_FILE.exists():
-            return None
-
-        with open(ANALYSES_FILE, "r") as f:
-            for line in f:
-                record = json.loads(line)
-                if record["id"] == result_id:
-                    return record["result"]
-
-        logger.warning(f"Result not found: {result_id}")
-        return None
-
-    except Exception as e:
-        logger.error(f"Failed to retrieve result: {e}")
-        return None
+def is_error(output: Any) -> bool:
+    """True if a specialist's output is an error result (these are never cached)."""
+    return isinstance(output, dict) and (output.get("status") == "error" or "error_message" in output)
 
 
-def get_history(agent_name: str = None, repo_url: str = None, limit: int = 10) -> list[dict]:
-    """
-    Get history of stored results.
-
-    Args:
-        agent_name: Filter by agent name (optional)
-        repo_url: Filter by repo URL (optional)
-        limit: Maximum number of results to return
-
-    Returns:
-        List of result records
-    """
-    try:
-        if not ANALYSES_FILE.exists():
-            return []
-
-        results = []
-        with open(ANALYSES_FILE, "r") as f:
-            for line in f:
-                record = json.loads(line)
-
-                # Apply filters
-                if agent_name and record["agent"] != agent_name:
-                    continue
-                if repo_url and record["repo_url"] != repo_url:
-                    continue
-
-                results.append(record)
-
-        # Return most recent first
-        results.sort(key=lambda r: r["timestamp"], reverse=True)
-        return results[:limit]
-
-    except Exception as e:
-        logger.error(f"Failed to get history: {e}")
-        return []
+def summarize(output: Any, max_chars: int = 400) -> str:
+    """Compact text form of an output, for recall and display."""
+    text = output if isinstance(output, str) else json.dumps(output, default=str)
+    return text if len(text) <= max_chars else text[: max_chars - 3] + "..."
 
 
-def clear_memory():
-    """Clear all stored results."""
-    try:
-        if ANALYSES_FILE.exists():
-            ANALYSES_FILE.unlink()
-        logger.info("Memory cleared")
-    except Exception as e:
-        logger.error(f"Failed to clear memory: {e}")
+class SessionMemory:
+    """Short-term memory: the most recent agent runs for a single user session."""
 
+    def __init__(self, max_entries: int = 20):
+        self.max_entries = max_entries
+        self._entries: list[dict] = []
 
-def get_stats() -> dict:
-    """Get statistics about stored results."""
-    try:
-        if not ANALYSES_FILE.exists():
-            return {
-                "total_results": 0,
-                "agents": {},
-                "repos": [],
+    def record(self, agent: str, input: str, output: Any, cached: bool = False) -> None:
+        self._entries.append(
+            {
+                "agent": agent,
+                "input": (input or "").strip(),
+                "summary": summarize(output),
+                "cached": cached,
+                "timestamp": time.time(),
             }
+        )
+        del self._entries[: -self.max_entries]
 
-        agents = {}
-        repos = set()
-        total = 0
+    def recent(self, limit: int = 10) -> list[dict]:
+        """Most recent runs first, each with its age in seconds."""
+        now = time.time()
+        return [{**e, "age_seconds": int(now - e["timestamp"])} for e in reversed(self._entries[-limit:])]
 
-        with open(ANALYSES_FILE, "r") as f:
-            for line in f:
-                record = json.loads(line)
-                total += 1
+    def has_input(self, input: str) -> bool:
+        """True if this exact (normalized) input was already run earlier in this session."""
+        target = normalize_input(input)
+        return any(normalize_input(e["input"]) == target for e in self._entries)
 
-                agent = record.get("agent", "unknown")
-                agents[agent] = agents.get(agent, 0) + 1
+    def clear(self) -> None:
+        self._entries.clear()
 
-                repo = record.get("repo_url", "unknown")
-                if repo:
-                    repos.add(repo)
+    def __len__(self) -> int:
+        return len(self._entries)
 
-        return {
-            "total_results": total,
-            "agents": agents,
-            "repos": list(repos),
-        }
 
-    except Exception as e:
-        logger.error(f"Failed to get stats: {e}")
-        return {}
+class ResultCache:
+    """Shared LRU cache with a TTL; thread-safe since Streamlit serves sessions on separate threads."""
+
+    def __init__(self, ttl_seconds: int = 3600, max_entries: int = 100):
+        self.ttl_seconds = ttl_seconds
+        self.max_entries = max_entries
+        self.hits = 0
+        self.misses = 0
+        self._data: OrderedDict[tuple[str, str], tuple[float, Any]] = OrderedDict()
+        self._lock = threading.Lock()
+
+    def get(self, agent: str, input: str) -> Optional[Any]:
+        key = (agent, normalize_input(input))
+        with self._lock:
+            entry = self._data.get(key)
+            if entry is None or time.time() - entry[0] > self.ttl_seconds:
+                self._data.pop(key, None)
+                self.misses += 1
+                return None
+            self._data.move_to_end(key)
+            self.hits += 1
+            return entry[1]
+
+    def put(self, agent: str, input: str, output: Any) -> None:
+        key = (agent, normalize_input(input))
+        with self._lock:
+            self._data[key] = (time.time(), output)
+            self._data.move_to_end(key)
+            while len(self._data) > self.max_entries:
+                self._data.popitem(last=False)
+
+    def __len__(self) -> int:
+        with self._lock:
+            return len(self._data)
+
+
+def run_with_memory(
+    agent: str,
+    input: str,
+    fn: Callable[[str], Any],
+    cache: Optional[ResultCache] = None,
+    session: Optional[SessionMemory] = None,
+    before_run: Optional[Callable[[], bool]] = None,
+) -> tuple[Any, bool]:
+    """
+    Run `fn(input)` for an agent, consulting/updating memory around it.
+
+    On a cache hit the agent isn't run at all. Otherwise `before_run` (e.g. a rate-limit check) is
+    called first; if it returns False nothing runs and (None, False) is returned. Successful
+    results from cacheable agents are cached; every run is recorded to session memory.
+
+    Returns (output, cache_hit).
+    """
+    cacheable = cache is not None and agent in CACHEABLE_AGENTS
+
+    if cacheable:
+        cached = cache.get(agent, input)
+        if cached is not None:
+            if session is not None:
+                session.record(agent, input, cached, cached=True)
+            return cached, True
+
+    if before_run is not None and not before_run():
+        return None, False
+
+    output = fn(input)
+
+    if cacheable and not is_error(output):
+        cache.put(agent, input, output)
+    if session is not None:
+        session.record(agent, input, output)
+    return output, False

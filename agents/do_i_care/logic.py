@@ -8,7 +8,7 @@ from typing import Optional
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
-from core.llm import call_llm
+from core.llm import call_llm, LLMUnavailableError
 from agents.do_i_care.prompts import (
     SYSTEM_PROMPT,
     SCORING_PROMPT,
@@ -56,12 +56,12 @@ def run_do_i_care(headlines_batch: list[str], user_profile: str = None) -> dict:
     try:
         scoring_response = call_llm(scoring_prompt, system=SYSTEM_PROMPT)
         logger.info(f"Scoring response: {scoring_response[:100]}...")
-    except Exception as e:
+    except LLMUnavailableError as e:
         logger.error(f"Scoring LLM call failed: {e}")
-        return {
-            "error_message": f"Failed to score items: {str(e)[:100]}",
-            "status": "error",
-        }
+        return {"error_message": str(e), "status": "error"}
+    except Exception as e:
+        logger.error(f"Unexpected scoring error: {e}")
+        return {"error_message": "Failed to score items. Please try again.", "status": "error"}
 
     # Step 2: Parse scores and select top 3
     scores = _parse_scores(scoring_response, headlines_batch)

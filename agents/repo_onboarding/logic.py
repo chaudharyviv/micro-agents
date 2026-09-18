@@ -8,8 +8,8 @@ from typing import Optional
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
-from core.github_tool import fetch_repo
-from core.llm import call_llm
+from core.github_tool import fetch_repo, GitHubAPIError
+from core.llm import call_llm, LLMUnavailableError
 from agents.repo_onboarding.prompts import (
     SYSTEM_PROMPT,
     USER_PROMPT_TEMPLATE,
@@ -47,12 +47,12 @@ def generate_onboarding_guide(repo_url: str) -> dict:
     try:
         repo_data = fetch_repo(repo_url)
         logger.info(f"Fetched repo data: {len(repo_data.get('file_tree', ''))} chars in file tree")
-    except Exception as e:
+    except GitHubAPIError as e:
         logger.error(f"Failed to fetch repo: {e}")
-        return {
-            "error_message": f"Failed to fetch repository: {str(e)[:100]}",
-            "repo_url": repo_url,
-        }
+        return {"error_message": str(e), "repo_url": repo_url}
+    except Exception as e:
+        logger.error(f"Unexpected error fetching repo: {e}")
+        return {"error_message": "Failed to fetch repository. Please try again.", "repo_url": repo_url}
 
     # Format repo data for LLM
     formatted_repo_data = f"""
@@ -77,12 +77,12 @@ README Content (first 2000 chars):
     try:
         llm_response = call_llm(user_prompt, system=SYSTEM_PROMPT)
         logger.info(f"LLM response: {llm_response[:100]}...")
-    except Exception as e:
+    except LLMUnavailableError as e:
         logger.error(f"LLM call failed: {e}")
-        return {
-            "error_message": f"LLM service unavailable: {str(e)[:100]}",
-            "repo_url": repo_url,
-        }
+        return {"error_message": str(e), "repo_url": repo_url}
+    except Exception as e:
+        logger.error(f"Unexpected LLM error: {e}")
+        return {"error_message": "LLM service unavailable. Please try again.", "repo_url": repo_url}
 
     # Parse LLM response
     guide = _parse_guide(llm_response, repo_url)

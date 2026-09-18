@@ -8,7 +8,7 @@ from typing import Optional
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
-from core.llm import call_llm
+from core.llm import call_llm, LLMUnavailableError
 from core.search import search
 from agents.opportunity_scout.prompts import (
     SYSTEM_PROMPT,
@@ -87,12 +87,12 @@ def run_opportunity_scout(github_username: str) -> dict:
     try:
         analysis = call_llm(analysis_prompt, system=SYSTEM_PROMPT)
         logger.info(f"Generated analysis: {analysis[:100]}...")
-    except Exception as e:
+    except LLMUnavailableError as e:
         logger.error(f"Analysis failed: {e}")
-        return {
-            "error_message": f"Failed to generate analysis: {str(e)[:100]}",
-            "status": "error",
-        }
+        return {"error_message": str(e), "status": "error"}
+    except Exception as e:
+        logger.error(f"Unexpected analysis error: {e}")
+        return {"error_message": "Failed to generate analysis. Please try again.", "status": "error"}
 
     # Parse the analysis
     parsed = _parse_analysis(analysis)

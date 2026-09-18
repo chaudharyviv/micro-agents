@@ -6,7 +6,7 @@ Core design decisions and philosophy behind the micro-agents framework.
 
 ## Mission
 
-Build **lightweight, specialized AI agents** for distinct tasks using open-weight LLMs, deployable as a single Gradio app without external frameworks or persistent infrastructure.
+Build **lightweight, specialized AI agents** for distinct tasks using OpenAI's `gpt-4o-mini`, deployable as a single Streamlit app without external frameworks or persistent infrastructure.
 
 **Core Constraint:** No LangGraph, no LangChain, no databases, no complex orchestration.
 
@@ -45,7 +45,7 @@ from core.llm import call_llm
 from core.search import search
 
 # ❌ Bad: Inline API calls
-groq_client = Groq(api_key=os.getenv("GROQ_API_KEY"))
+openai_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 ```
 
 ---
@@ -56,7 +56,7 @@ groq_client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 
 | API | Primary | Fallback | When to Fallback |
 |-----|---------|----------|------------------|
-| **LLM** | Groq | HF Inference | Rate limit / timeout |
+| **LLM** | OpenAI (`gpt-4o-mini`) | Retry once, same provider | Transient error / timeout |
 | **Search** | Tavily | DuckDuckGo | Quota exceeded |
 | **GitHub** | Unauth | Auth (token) | Rate limit hit |
 
@@ -76,7 +76,7 @@ groq_client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 |-------|---------|-------|---------|-----------|
 | **1** | Search → LLM | 2 | Blog Scout | ⭐ |
 | **3** | Fixed pipeline | 3 | Repo Onboarding | ⭐⭐ |
-| **4** | ReAct + guardrail | 4 | Issue Planner | ⭐⭐ |
+| **4** | Multi-step fixed pipeline + guardrail | 4 | Issue Planner | ⭐⭐ |
 | **5** | Score → filter → analyze | 3 | Do I Care? | ⭐⭐ |
 
 **Why:**
@@ -124,11 +124,10 @@ groq_client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 
 | Service | Free Tier | Cost | Use Case |
 |---------|-----------|------|----------|
-| Groq | Yes (30 calls/min) | Free | Primary LLM |
+| OpenAI | No | Pay-as-you-go (`gpt-4o-mini` is the cheapest chat tier) | LLM |
 | Tavily | 1000 searches/month | $5/month after | Search |
 | GitHub | 60 req/hr unauth | Free | Repo fetching |
-| HF Inference | Free tier | Free | LLM fallback |
-| Gradio | Spaces free tier | Free (with limits) | Hosting |
+| Streamlit | Community Cloud free tier | Free (with limits) | Hosting |
 
 **Why:**
 - No surprise bills
@@ -174,7 +173,7 @@ groq_client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 **Levels:**
 1. **Level 1:** Search + LLM (no loop, no state)
 2. **Level 3:** Fixed pipeline (N tool calls in sequence, then synthesize)
-3. **Level 4:** ReAct loop (plan → tool call → observe → repeat, max 4 steps)
+3. **Level 4:** Multi-step fixed pipeline with a guardrail (4 sequential steps, no dynamic looping)
 4. **Level 5:** Scoring + filtering (multi-step with intermediate decisions)
 
 **Why:**
@@ -185,31 +184,32 @@ groq_client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 
 ---
 
-### Why Gradio (Not Streamlit)?
+### Why Streamlit (Migrated from Gradio)?
 
 | Aspect | Gradio | Streamlit |
 |--------|--------|----------|
-| Setup | `gr.Interface` or `gr.Blocks` | `@st.cache`, reactive reruns |
-| Multi-tab UI | Native (gr.Tabs) | Via URL routing hacks |
-| Input types | Flexible (Textbox, File, Slider, etc.) | All reactive |
-| Hosting | HF Spaces (free) | Streamlit Cloud (free) |
-| Philosophy | Functional I/O (input → function → output) | Reactive script reruns |
+| Setup | `gr.Interface` or `gr.Blocks` | Plain script, reruns top-to-bottom on interaction |
+| Multi-tab UI | Native (`gr.Tabs`) | Native (`st.tabs`) |
+| Batched input | Manual `.click()` wiring per widget | `st.form` batches inputs, submits once |
+| Input types | Flexible (Textbox, File, Slider, etc.) | Equally flexible; reruns are cheap since forms gate expensive work |
+| Hosting | HF Spaces (free) | HF Spaces (`space-sdk: streamlit`) or Streamlit Community Cloud (free) |
+| Philosophy | Functional I/O (input → function → output) | Reactive script reruns, gated with `st.form` to stay functional per submit |
 
-**Decision:** Gradio's functional model matches our agents (no hidden state, clean input/output).
+**Decision:** The project originally chose Gradio for its clean functional I/O model. It migrated to Streamlit because `st.form` + `st.tabs` give the same input → function → output feel per tab, while Streamlit's wider native widget set and theming (`.streamlit/config.toml`) make it easier to extend the dashboard as more agents are added.
 
 ---
 
-## Why No Test Framework?
+## Testing Strategy
 
-**Decision:** Smoke tests (`if __name__ == "__main__"`) + evals only. No pytest.
+**Decision:** Three layers - smoke tests, `pytest` unit tests (mocked API calls), and evals (real API calls).
 
 **Why:**
-- Agents are integration-tested via evals (real API calls)
-- Unit testing with mocks is fragile (mocks don't match reality)
-- Each agent has a smoke test for manual verification
-- `evals/run_evals.py` is the integration test suite
+- Smoke tests (`if __name__ == "__main__"`) give fast manual verification per module
+- `pytest` (in `tests/`) covers parsing, error handling, and control flow with mocked APIs, cheaply and deterministically - this is what runs before every change
+- Evals (`evals/run_evals.py`) are the integration layer: real API calls, real-world pass rate
+- Mocked unit tests and real-call evals catch different classes of bugs; neither replaces the other
 
-**Trade-off:** Less granular test coverage, but more confidence in real-world performance.
+**Trade-off:** More to maintain than a single layer, but each layer is cheap and catches something the others don't.
 
 ---
 
@@ -221,7 +221,7 @@ groq_client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 
 ```python
 # ✅ Good
-api_key = os.getenv("GROQ_API_KEY")
+api_key = os.getenv("OPENAI_API_KEY")
 
 # ❌ Bad
 api_key = "sk-12345..."
@@ -237,7 +237,7 @@ api_key = "sk-12345..."
 
 ### Scope Minimization
 
-- **GROQ_API_KEY:** Inference only
+- **OPENAI_API_KEY:** Inference only
 - **TAVILY_API_KEY:** Search only
 - **GITHUB_TOKEN:** Read-only (`public_repo` scope)
 
@@ -250,8 +250,8 @@ api_key = "sk-12345..."
 **Decision:** Agents run identically locally and on HF Spaces.
 
 ```bash
-# Local: Direct Python execution
-python app.py
+# Local: Direct Streamlit execution
+streamlit run app.py
 
 # Spaces: Same code, secrets injected by platform
 # No code differences
@@ -280,7 +280,7 @@ return {
 ```
 
 **Why:**
-- Gradio and HF Spaces capture stdout
+- Streamlit and HF Spaces capture stdout
 - Error dicts are returned to user
 - No need for external logging service (Sentry, DataDog, etc.)
 
@@ -311,19 +311,28 @@ $ python evals/run_evals.py
 
 By design, the following are out-of-scope:
 
-### ❌ Multi-Agent Collaboration
-- No agent-to-agent handoff
-- No shared state between agents
-- Each agent runs independently
+### ✅ Multi-Agent Collaboration (added)
+Originally out of scope ("increases complexity 10x, not needed for independent agents"). Added via
+`agents/orchestrator/`, which routes a free-text task to 1-2 specialist agents and synthesizes their
+results. It's deliberately minimal:
+- No shared mutable state between agents - the orchestrator calls each specialist's `logic.py`
+  function directly and passes plain strings/dicts, nothing more
+- No dynamic multi-step handoff chains - at most one routing decision, then a fixed 1-2 specialist
+  calls, then one synthesis call
+- The routing decision is grounded against the original task text before execution, as a guard
+  against a target substituted by prompt injection in content a specialist fetched earlier
 
-**Why:** Increases complexity 10x. For 6 independent agents, not needed.
+**Why now:** A single, bounded orchestrator (one routing call + direct function calls) is a small,
+auditable addition, not the open-ended agent-to-agent framework this section originally ruled out.
 
-### ❌ Persistent Memory
-- No database, no cache layer
-- Each run forgets the previous one
-- Optional: `core/memory.py` for agent-level caching (not used by default)
+### ❌ Persistent Memory (durable storage)
+- No database and no files; nothing survives a restart
+- Memory is in-process only (`core/memory.py`): a per-session run history plus a bounded, TTL'd
+  result cache shared across visitors for public-URL agents
 
-**Why:** Adds deployment complexity. Agents work fine stateless.
+**Why:** A database or on-disk store adds deployment complexity and, on shared/ephemeral hosts like
+Streamlit Cloud, leaks results between visitors and disappears on restart. In-process memory gives
+the "agent = LLM + tools + memory" behavior (follow-ups, instant repeats) without those risks.
 
 ### ❌ Async / Parallel Execution
 - No `asyncio`, no `concurrent.futures`
@@ -332,7 +341,7 @@ By design, the following are out-of-scope:
 
 **Why:** Adds debugging difficulty. Not needed for single-user app.
 
-### ❌ Advanced Gradio Features
+### ❌ Advanced Streamlit Features
 - No session state management
 - No progress bars / streaming output
 - No file uploads (except URLs as text)
@@ -361,12 +370,11 @@ By design, the following are out-of-scope:
 
 1. **Copy template:** `agents/blog_scout/` → `agents/my_agent/`
 2. **Edit prompts.py:** Define system prompt
-3. **Implement logic.py:** Core agent logic (imports from `core/`)
-4. **Write app.py:** Gradio interface
-5. **Add evals.jsonl:** 3–5 test cases
-6. **Update root app.py:** Add tab + import
-7. **Test:** Run logic.py smoke test, run evals
-8. **Done:** Agent is ready to deploy
+3. **Implement logic.py:** Core agent logic (imports from `core/`, smoke test in `__main__`)
+4. **Add evals.jsonl:** 3–5 test cases
+5. **Update root app.py:** Add a tab via `render_agent_tab()` + import
+6. **Test:** Run logic.py smoke test, run evals
+7. **Done:** Agent is ready to deploy
 
 ### Adding a Core API
 
@@ -378,7 +386,7 @@ By design, the following are out-of-scope:
 
 ### Deploying to HF Spaces
 
-1. **Local test:** `python app.py`, verify all tabs work
+1. **Local test:** `streamlit run app.py`, verify all tabs work
 2. **Git commit:** `git add -A && git commit -m "..."`
 3. **Push code:** `git push space main`
 4. **Set secrets:** HF Space UI → Settings → Secrets
@@ -391,12 +399,12 @@ By design, the following are out-of-scope:
 
 | Metric | Target | Notes |
 |--------|--------|-------|
-| **Page load** | < 2s | Gradio UI + HF Space startup |
+| **Page load** | < 2s | Streamlit UI + HF Space startup |
 | **Agent run** | 5–30s | Sum of API calls + parsing |
 | **Search** | < 3s | Tavily or DuckDuckGo |
-| **LLM inference** | 1–5s | Groq (primary), 3–10s HF (fallback) |
-| **Error recovery** | < 2s | Fallback API activation |
-| **Throughput** | ~5 runs/min | Groq rate limit (30 calls/min) with multi-step agents |
+| **LLM inference** | 1–5s | OpenAI `gpt-4o-mini`, +1 attempt if retried |
+| **Error recovery** | < 2s | Retry / fallback activation |
+| **Throughput** | ~5 runs/min | Bound by OpenAI account rate limit with multi-step agents |
 
 ---
 
@@ -426,5 +434,3 @@ By design, the following are out-of-scope:
 
 - **Architecture:** [ARCHITECTURE.md](./ARCHITECTURE.md)
 - **Implementation:** [README.md](./README.md)
-- **Deployment:** [deployment.md](./deployment.md)
-- **Original Spec:** [micro-agents-design-spec.md](./micro-agents-design-spec.md)

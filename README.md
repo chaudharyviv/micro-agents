@@ -1,12 +1,12 @@
 # micro-agents
 
-Six independent AI agents for specialized tasks, powered by open-weight LLMs (Groq).
+Seven specialist AI agents plus an orchestrator, powered by OpenAI's gpt-4o-mini.
 
 ## Overview
 
-Micro-Agents is a lightweight framework for building specialized AI agents without external dependencies like LangGraph, LangChain, or persistent databases. Each agent follows a specific pattern and uses core APIs for LLM, search, and GitHub interactions.
+Micro-Agents is a lightweight framework for building specialized AI agents without external dependencies like LangGraph, LangChain, or persistent databases. Each agent follows a specific pattern and uses core APIs for LLM, search, and GitHub interactions. An orchestrator agent routes free-text tasks to 1-2 specialists and synthesizes their results.
 
-**Live Demo:** [Hugging Face Spaces](#deployment) | **Design Spec:** [micro-agents-design-spec.md](./micro-agents-design-spec.md)
+See [Deployment](#deployment) for instructions to run this locally or deploy your own instance.
 
 ---
 
@@ -14,18 +14,20 @@ Micro-Agents is a lightweight framework for building specialized AI agents witho
 
 | Agent | Pattern | Input | Output | Complexity |
 |-------|---------|-------|--------|------------|
+| **Orchestrator** | Agent harness: model picks tool(s), calls them, synthesizes | Free-text task | Synthesized Markdown report | ⭐⭐⭐ |
 | **Blog Idea Scout** | Level 1: Search → LLM | Topic (or "trending") | 3-5 blog ideas with pitches & URLs | ⭐ |
 | **Repo Onboarding** | Level 3: Fetch Repo → Search → LLM | Repo URL | Comprehensive onboarding guide | ⭐⭐ |
 | **CVE Impact** | Level 3: Search → LLM | CVE ID / Software | Security assessment & remediation | ⭐⭐ |
 | **Issue Fix Planner** | Level 4: Fetch Issue → Search → LLM → Plan | Issue URL | Implementation plan (no code) | ⭐⭐ |
 | **Do I Care?** | Level 5: Score → Filter → Analyze | Headlines + Profile | Top 3 with why & actions | ⭐⭐ |
 | **Opportunity Scout** | Level 5: Analyze → Trends → Opportunities | GitHub Username | Skill gaps, jobs, project ideas | ⭐⭐ |
+| **Security Audit** | Level 5: combines Onboarding + CVE Impact | Repo URL | Unified security audit report | ⭐⭐ |
 
 **Pattern Levels:**
 - **Level 1:** Direct LLM call (search + LLM)
 - **Level 3:** Fixed pipeline (3 tool calls + synthesis)
-- **Level 4:** ReAct loop with guardrails (4 steps max, no code generation)
-- **Level 5:** Relevance scoring & filtering (score → filter → analyze)
+- **Level 4:** Multi-step fixed pipeline with guardrails (no code generation)
+- **Level 5:** Relevance scoring & filtering, or combining other agents' output (score → filter → analyze)
 
 ---
 
@@ -34,7 +36,7 @@ Micro-Agents is a lightweight framework for building specialized AI agents witho
 ### Requirements
 - Python 3.9+
 - `pip` and `venv`
-- Secrets: `GROQ_API_KEY`, `TAVILY_API_KEY`, `HF_TOKEN`, `GITHUB_TOKEN` (optional)
+- Secrets: `OPENAI_API_KEY`, `TAVILY_API_KEY`, `GITHUB_TOKEN` (optional)
 
 ### Local Setup
 
@@ -58,10 +60,10 @@ cp .env.example .env
 ### Run Locally
 
 ```bash
-# Start the Gradio app
-python app.py
+# Start the Streamlit app
+streamlit run app.py
 
-# Opens at http://127.0.0.1:7860
+# Opens at http://localhost:8501
 ```
 
 ### Test Smoke Tests
@@ -79,6 +81,19 @@ python evals/run_evals.py
 
 ---
 
+## Deployment on Streamlit Community Cloud
+
+1. Push the repo to GitHub and create an app at [share.streamlit.io](https://share.streamlit.io) with `app.py` as the entry point.
+2. In **App settings → Secrets**, add `OPENAI_API_KEY` (required) plus optional `TAVILY_API_KEY` and `GITHUB_TOKEN`. Streamlit Cloud exposes top-level secrets as environment variables, which is where the `core/` modules read them.
+3. Set a monthly spend cap on the OpenAI key - the in-app cooldown and per-session request cap are only a soft guard.
+
+**Memory on a public deployment.** Each agent = LLM + tools + memory, and memory is designed for shared, ephemeral hosting: nothing is written to disk.
+- **Session memory** (`SessionMemory`): each visitor's own run history, kept in their session and never shown to anyone else. The orchestrator's `recall_memory` tool reads it for follow-ups.
+- **Shared result cache** (`ResultCache`): holds results only for agents that depend solely on a public URL (`repo_onboarding`, `cve_impact`, `security_audit`, `issue_fix_planner`), for one hour, capped at 100 entries. Cache hits skip GitHub/OpenAI and don't count against the visitor's request cap.
+- Free-text agents (`blog_scout`, `do_i_care`, `opportunity_scout`) and the orchestrator's own reports are never cached across visitors.
+
+---
+
 ## Deployment on Hugging Face Spaces
 
 ### Prerequisites
@@ -91,7 +106,7 @@ python evals/run_evals.py
 1. **Create a Space:**
    ```bash
    huggingface-cli login  # Enter your token
-   huggingface-cli repo create micro-agents --type space --space-sdk gradio
+   huggingface-cli repo create micro-agents --type space --space-sdk streamlit
    ```
 
 2. **Push code:**
@@ -104,10 +119,9 @@ python evals/run_evals.py
 3. **Set secrets in HF Space UI:**
    - Go to **Space Settings → Secrets**
    - Add:
-     - `GROQ_API_KEY`: Your Groq API key
+     - `OPENAI_API_KEY`: Your OpenAI API key
      - `TAVILY_API_KEY`: Your Tavily API key (optional, uses DuckDuckGo as fallback)
      - `GITHUB_TOKEN`: Your GitHub PAT (optional, for rate limit increase)
-     - `HF_TOKEN`: Your Hugging Face token (optional)
 
 4. **Verify deployment:**
    - Navigate to `https://huggingface.co/spaces/{your-username}/micro-agents`
@@ -125,24 +139,25 @@ python evals/run_evals.py
 ```
 micro-agents/
 ├── core/                          # Shared API wrappers
-│   ├── llm.py                    # Groq + HF fallback
+│   ├── llm.py                    # OpenAI (gpt-4o-mini), retried once
 │   ├── search.py                 # Tavily + DuckDuckGo fallback
 │   ├── github_tool.py            # GitHub REST API wrapper
-│   ├── agent.py                  # ReAct loop (max 4 steps)
-│   └── memory.py                 # Optional memory layer
+│   └── memory.py                 # Session memory + shared result cache (in-process, bounded)
 │
-├── agents/                        # 6 specialized agents
+├── agents/                        # 7 specialists + 1 orchestrator
+│   ├── orchestrator/             # Routes a task to 1-2 specialists, synthesizes results
 │   ├── blog_scout/               # Level 1: Search → LLM
 │   ├── repo_onboarding/          # Level 3: Fetch → Search → LLM
 │   ├── cve_impact/               # Level 3: Search → LLM
-│   ├── issue_fix_planner/        # Level 4: ReAct loop
+│   ├── issue_fix_planner/        # Level 4: multi-step fixed pipeline
 │   ├── do_i_care/                # Level 5: Score → Filter → Analyze
-│   └── opportunity_scout/        # Level 5: Analyze → Trends → Opportunities
+│   ├── opportunity_scout/        # Level 5: Analyze → Trends → Opportunities
+│   └── security_audit/           # Level 5: combines onboarding + CVE analysis
 │
 ├── evals/                         # Evaluation suite
 │   └── run_evals.py              # Test runner (reports pass rate)
 │
-├── app.py                         # Gradio multi-tab UI (main entry point)
+├── app.py                         # Streamlit multi-tab UI (main entry point)
 ├── requirements.txt               # Dependencies (no LangGraph, LangChain)
 ├── .env.example                   # Secret template
 └── README.md                      # This file
@@ -151,8 +166,7 @@ micro-agents/
 ### Core APIs
 
 **LLM (core/llm.py):**
-- Primary: Groq API (`gpt-4-like` model)
-- Fallback: HF Inference (free tier)
+- OpenAI API (`gpt-4o-mini`), retried once on failure
 - Usage: `call_llm(prompt, system=None, model="default")`
 
 **Search (core/search.py):**
@@ -163,11 +177,21 @@ micro-agents/
 **GitHub (core/github_tool.py):**
 - REST API (60 req/hr unauthenticated, 5000 req/hr authenticated)
 - Functions: `fetch_repo()`, `fetch_issue()`, `fetch_pr()`
+- Tracks GitHub's own rate-limit headers and fails fast with a clear error when the budget is nearly exhausted, instead of burning through it silently
 
-**Agent Loop (core/agent.py):**
-- ReAct pattern: plan → tool call → observe → respond
-- Max 4 steps per task
-- Includes guardrails (no code generation for planning agents)
+**Agent Harness (core/harness.py):**
+- A minimal, from-scratch tool-calling loop built on OpenAI function calling - no LangChain/LangGraph
+- Each specialist is registered as a `Tool`; the model itself decides which 1-2 tools to call and when
+  it has enough to answer, instead of a hand-coded routing step
+- Guardrails: a per-step cap, per-tool error isolation, and an optional per-call `validate` hook
+- Usage: `run_harness(task, tools, system_prompt)`
+
+**Orchestrator (agents/orchestrator/logic.py):**
+- Runs entirely on the harness above: wraps all 7 specialists as tools and lets the model pick,
+  call, and synthesize a Markdown report in one agentic loop
+- Uses the harness's `validate` hook to sanity-check each tool call's input against the original
+  task text, guarding against prompt injection from content fetched by an earlier tool call
+- Usage: `run_orchestrator(task)`
 
 ---
 
@@ -190,18 +214,19 @@ See [EVALUATION_GUIDE.md](./EVALUATION_GUIDE.md) for detailed instructions on:
 
 **Target Pass Rates** (Production Readiness):
 
-| Agent | Target | Achieved* | Test Cases |
+| Agent | Target | Achieved | Test Cases |
 |-------|--------|-----------|------------|
-| blog_scout | ≥80% | TBD | 5 (search + URL validation) |
-| repo_onboarding | ≥80% | TBD | 5 (guide structure + completeness) |
-| cve_impact | ≥80% | TBD | 5 (security assessment + error handling) |
-| issue_fix_planner | ≥80% | TBD | 5 (no code generation guardrail) |
-| do_i_care | ≥80% | TBD | 5 (relevance scoring + filtering) |
-| opportunity_scout | ≥80% | TBD | 5 (career analysis + insights) |
+| blog_scout | ≥80% | ✅ 100% (5/5) | 5 (search + URL validation) |
+| repo_onboarding | ≥80% | ✅ 80% (4/5) | 5 (guide structure + completeness) |
+| cve_impact | ≥80% | ⚠️ 60% (3/5) | 5 (security assessment + error handling) |
+| issue_fix_planner | ≥80% | ✅ 80% (4/5) | 5 (no code generation guardrail) |
+| do_i_care | ≥80% | ⚠️ 40% (2/5) | 5 (relevance scoring + filtering) |
+| opportunity_scout | ≥80% | ✅ 80% (4/5) | 5 (career analysis + insights) |
+| orchestrator | ≥80% | ✅ 80% (4/5) | 5 (routing + synthesis) |
 
-*\* Run `python evals/run_evals.py` to generate real pass rates*
+**Overall: 74% (26/35)** — 5/7 agents at or above the 80% target. `cve_impact` and `do_i_care` are below target and tracked for improvement; see [EVALUATION_GUIDE.md](./EVALUATION_GUIDE.md) for how to debug and raise a specific agent's pass rate.
 
-**Status:** Ready to test. Run evals locally to see actual performance.
+*Generated via `python evals/run_evals.py`.*
 
 ---
 
@@ -212,9 +237,8 @@ See [EVALUATION_GUIDE.md](./EVALUATION_GUIDE.md) for detailed instructions on:
 1. **Create directory:** `agents/my_agent/`
 2. **Implement files:**
    - `prompts.py` — system & user prompts
-   - `logic.py` — core agent logic (imports from `core/`)
-   - `app.py` — Gradio interface (smoke test in `__main__`)
-3. **Add to dashboard:** Import in root `app.py` and add tab
+   - `logic.py` — core agent logic (imports from `core/`, smoke test in `__main__`)
+3. **Add to dashboard:** Import in root `app.py` and add a tab
 4. **Evaluate:** Add `evals.jsonl` with 3-5 test cases
 
 ### Testing
@@ -230,7 +254,7 @@ python evals/run_evals.py
 ### Design Constraints
 
 - **No frameworks:** No LangGraph, LangChain, Pydantic, or databases
-- **No persistence:** Each run is independent (no memory)
+- **No durable persistence:** memory is in-process only (per-session history + a bounded, TTL'd shared cache) - no database and no files, so nothing survives a restart
 - **No async:** Simple synchronous calls only
 - **Smoke tests only:** No pytest or CI/CD setup
 - **Secrets via .env:** Never hardcoded
@@ -242,10 +266,9 @@ python evals/run_evals.py
 Create `.env` from `.env.example`:
 
 ```bash
-GROQ_API_KEY=your-groq-key
+OPENAI_API_KEY=your-openai-key
 TAVILY_API_KEY=your-tavily-key          # Optional, uses DuckDuckGo fallback
 GITHUB_TOKEN=your-github-pat            # Optional, for higher rate limits
-HF_TOKEN=your-huggingface-token         # Optional, for HF Inference
 ```
 
 ---
@@ -255,11 +278,11 @@ HF_TOKEN=your-huggingface-token         # Optional, for HF Inference
 ### Agent times out
 - Check API keys and rate limits
 - Reduce model complexity or max_steps
-- Use fallback APIs (DuckDuckGo, HF Inference)
+- Use fallback APIs (DuckDuckGo)
 
-### Gradio app won't start
+### Streamlit app won't start
 - Ensure all dependencies installed: `pip install -r requirements.txt`
-- Check port 7860 is not in use: `netstat -tuln | grep 7860`
+- Check port 8501 is not in use: `netstat -tuln | grep 8501`
 - Run smoke test: `python agents/blog_scout/logic.py`
 
 ### CVE/Security agents return empty
@@ -295,10 +318,10 @@ MIT
 
 ## Resources
 
-- **Groq:** https://console.groq.com/docs
+- **OpenAI:** https://platform.openai.com/docs
 - **Tavily:** https://tavily.com
 - **GitHub API:** https://docs.github.com/en/rest
-- **Gradio:** https://gradio.app
+- **Streamlit:** https://docs.streamlit.io
 
 ---
 

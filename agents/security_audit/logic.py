@@ -10,8 +10,8 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from agents.repo_onboarding.logic import generate_onboarding_guide
 from agents.cve_impact.logic import analyze_cve_impact
-from core.github_tool import fetch_repo
-from core.llm import call_llm
+from core.github_tool import fetch_repo, GitHubAPIError
+from core.llm import call_llm, LLMUnavailableError
 from agents.security_audit.prompts import (
     SYSTEM_PROMPT,
     USER_PROMPT_TEMPLATE,
@@ -49,12 +49,12 @@ def generate_security_audit(repo_url: str) -> dict:
         repo_data = fetch_repo(repo_url)
         repo_name = repo_data.get("name", "Unknown")
         logger.info(f"Fetched repo: {repo_name}")
-    except Exception as e:
+    except GitHubAPIError as e:
         logger.error(f"Failed to fetch repo: {e}")
-        return {
-            "error_message": f"Failed to fetch repository: {str(e)[:100]}",
-            "repo_url": repo_url,
-        }
+        return {"error_message": str(e), "repo_url": repo_url}
+    except Exception as e:
+        logger.error(f"Unexpected error fetching repo: {e}")
+        return {"error_message": "Failed to fetch repository. Please try again.", "repo_url": repo_url}
 
     # Step 2: Generate onboarding guide (call Repo Onboarding agent)
     logger.info("Generating onboarding guide...")
@@ -70,7 +70,7 @@ def generate_security_audit(repo_url: str) -> dict:
         logger.info("Onboarding guide generated")
     except Exception as e:
         logger.error(f"Onboarding generation failed: {e}")
-        onboarding_text = f"[Could not generate onboarding guide: {str(e)[:100]}]"
+        onboarding_text = "[Could not generate onboarding guide due to an internal error]"
 
     # Step 3: Analyze CVE impact (call CVE Impact agent)
     logger.info("Analyzing CVE impact...")
@@ -86,7 +86,7 @@ def generate_security_audit(repo_url: str) -> dict:
         logger.info("CVE analysis generated")
     except Exception as e:
         logger.error(f"CVE analysis failed: {e}")
-        cve_text = f"[Could not analyze CVEs: {str(e)[:100]}]"
+        cve_text = "[Could not analyze CVEs due to an internal error]"
 
     # Step 4: Call LLM to generate unified audit
     logger.info("Generating unified security audit...")
@@ -100,12 +100,12 @@ def generate_security_audit(repo_url: str) -> dict:
     try:
         llm_response = call_llm(user_prompt, system=SYSTEM_PROMPT)
         logger.info(f"LLM response: {llm_response[:100]}...")
-    except Exception as e:
+    except LLMUnavailableError as e:
         logger.error(f"LLM call failed: {e}")
-        return {
-            "error_message": f"LLM service unavailable: {str(e)[:100]}",
-            "repo_url": repo_url,
-        }
+        return {"error_message": str(e), "repo_url": repo_url}
+    except Exception as e:
+        logger.error(f"Unexpected LLM error: {e}")
+        return {"error_message": "LLM service unavailable. Please try again.", "repo_url": repo_url}
 
     # Step 5: Parse LLM response
     audit = _parse_audit(llm_response, repo_url)

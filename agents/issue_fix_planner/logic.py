@@ -8,8 +8,8 @@ from typing import Optional
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
-from core.github_tool import fetch_issue, fetch_repo
-from core.llm import call_llm
+from core.github_tool import fetch_issue, fetch_repo, GitHubAPIError
+from core.llm import call_llm, LLMUnavailableError
 from core.search import search
 from agents.issue_fix_planner.prompts import (
     SYSTEM_PROMPT,
@@ -44,10 +44,13 @@ def run_issue_fix_planner(issue_url: str) -> dict:
     try:
         issue_data = fetch_issue(issue_url)
         logger.info(f"Fetched issue: {issue_data.get('title', 'Unknown')}")
-    except Exception as e:
+    except GitHubAPIError as e:
         logger.error(f"Failed to fetch issue: {e}")
+        return {"error_message": str(e), "issue_url": issue_url, "status": "error"}
+    except Exception as e:
+        logger.error(f"Unexpected error fetching issue: {e}")
         return {
-            "error_message": f"Failed to fetch issue: {str(e)[:100]}",
+            "error_message": "Failed to fetch issue. Please try again.",
             "issue_url": issue_url,
             "status": "error",
         }
@@ -102,10 +105,13 @@ Related Search Results:
     try:
         plan = call_llm(user_prompt, system=SYSTEM_PROMPT)
         logger.info(f"Generated plan: {plan[:100]}...")
-    except Exception as e:
+    except LLMUnavailableError as e:
         logger.error(f"LLM call failed: {e}")
+        return {"error_message": str(e), "issue_url": issue_url, "status": "error"}
+    except Exception as e:
+        logger.error(f"Unexpected LLM error: {e}")
         return {
-            "error_message": f"Failed to generate plan: {str(e)[:100]}",
+            "error_message": "Failed to generate plan. Please try again.",
             "issue_url": issue_url,
             "status": "error",
         }

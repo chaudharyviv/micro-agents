@@ -142,3 +142,9 @@ memory/
 *.tmp
 *.bak
 test_*.ps1
+
+#MD files
+DESIGN.md
+EVALUATION_GUIDE.md
+.claude/
+.kiro/

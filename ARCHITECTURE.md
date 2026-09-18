@@ -6,62 +6,79 @@ A reference guide to the system design, data flow, and component interactions.
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                    Gradio Web Interface (app.py)                │
-│                     (Multi-tab Dashboard)                       │
-└──────────────────────┬──────────────────────────────────────────┘
-                       │
-        ┌──────────────┼──────────────┐
-        │              │              │
-    ┌───▼────┐    ┌────▼────┐   ┌────▼────┐
-    │ Agent 1 │    │ Agent 2 │   │ Agent 3 │  ... (6 agents)
-    └───┬────┘    └────┬────┘   └────┬────┘
-        │              │              │
-        └──────────────┼──────────────┘
-                       │
-            ┌──────────▼──────────┐
-            │   Core API Layer    │
-            │  (core/*.py files)  │
-            └──────────┬──────────┘
-                       │
-        ┌──────────────┼──────────────┬──────────────┐
-        │              │              │              │
-    ┌───▼────┐   ┌─────▼─────┐  ┌────▼────┐   ┌────▼────┐
-    │  Groq  │   │  Tavily   │  │ GitHub  │   │    HF   │
-    │  LLM   │   │ Search    │  │  REST   │   │Inference│
-    └────────┘   └───────────┘  └────────┘   └────────┘
-       (Primary)    (Primary)    (Primary)     (Fallbacks)
+│                  Streamlit Web Interface (app.py)                │
+│              (per-agent tabs  +  Orchestrator tab)                │
+└───────────────┬─────────────────────────────┬─────────────────────┘
+                │                             │
+   direct call  │                             │  free-text task
+   (single-agent tab)                         │
+                │                    ┌─────────▼─────────┐
+                │                    │    ORCHESTRATOR     │
+                │                    │ agents/orchestrator │
+                │                    │  runs on the agent  │
+                │                    │  harness (below) -  │
+                │                    │  no fixed pipeline   │
+                │                    └─────────┬─────────┘
+                │                             │ model decides which 1-2
+                │              ┌──────────────┼──────────────┐
+                │              │              │              │
+        ┌───────▼───────┬──────▼──────┬───────▼──────┬───────────────┐
+        │  Blog Scout    │ Repo Onboard│ CVE Impact   │  ... (7 total) │
+        │  logic.py      │ logic.py    │ logic.py     │  specialist    │
+        └───────┬───────┴──────┬──────┴───────┬──────┴───────────────┘
+                │              │              │
+                └──────────────┼──────────────┘
+                               │
+                    ┌──────────▼──────────┐
+                    │   Core API Layer    │
+                    │  (core/llm.py, core/search.py, core/github_tool.py) │
+                    └──────────┬──────────┘
+                               │
+                ┌──────────────┼──────────────┐
+                │              │              │
+            ┌───▼────┐   ┌─────▼─────┐  ┌────▼────┐
+            │ OpenAI │   │  Tavily   │  │ GitHub  │
+            │  LLM   │   │ Search    │  │  REST   │
+            └────────┘   └───────────┘  └────────┘
+            (retried once)  (Primary)    (Primary)
+                          DuckDuckGo fallback
 ```
+
+The orchestrator is the key agentic layer, and it's the one agent that runs on a real **harness** (`core/harness.py`) instead of a hand-coded pipeline: each of the 7 specialists is exposed to the model as an OpenAI function-calling tool, and the model itself decides which 1-2 tools to call, with what input, and when it has enough to write a synthesized Markdown report — the harness only supplies the tool registry, the execution loop, and guardrails (step limit, per-tool error isolation, and a grounding check that blocks a tool call whose input doesn't actually appear in the user's task text, as a defense against prompt injection from earlier tool results). See [core/harness.py](#coreharnesspy) below.
 
 ---
 
 ## Component Breakdown
 
-### 1. Gradio Web Interface (app.py)
+### 1. Streamlit Web Interface (app.py)
 
-**Purpose:** Multi-tab UI for all 6 agents  
-**Technology:** Gradio 4.x  
+**Purpose:** Multi-tab UI for all 7 agents
+**Technology:** Streamlit >=1.57
 **Features:**
-- Tab-based navigation (one tab per agent)
-- Real-time input/output formatting
-- Error handling and display
+- Tab-based navigation (`st.tabs`, one tab per agent)
+- Each tab is a form (`st.form`) so input only submits on button click, not on every keystroke
+- Shared `render_agent_tab()` helper wires up the form, spinner, and Markdown output for every tab
+- Error handling and display via `st.warning` (missing input) and formatted Markdown (agent errors)
 - No state persistence between tabs
 
 **Key Functions:**
 ```python
-blog_scout_tab(topic)              # Search + LLM for blog ideas
-repo_onboarding_tab(repo_url)      # Onboarding guide generation
-cve_impact_tab(query)              # Security impact analysis
-issue_planner_tab(issue_url)       # Implementation planning
-do_i_care_tab(headlines_text)      # Relevance scoring
-opportunity_scout_tab(username)    # Career opportunity detection
-security_audit_tab(repo_url)       # Security audit (extra agent)
+render_agent_tab(form_key, label, placeholder, button_label, run, format_result, ...)
+# Generic tab renderer, parameterized per agent:
+scout_blog_ideas(topic)              # Search + LLM for blog ideas
+generate_onboarding_guide(repo_url)  # Onboarding guide generation
+analyze_cve_impact(query)            # Security impact analysis
+run_issue_fix_planner(issue_url)     # Implementation planning
+run_do_i_care(headlines)             # Relevance scoring
+run_opportunity_scout(username)      # Career opportunity detection
+generate_security_audit(repo_url)    # Security audit
 ```
 
 ---
 
 ### 2. Agent Layer (agents/*/logic.py)
 
-Six specialized agents, each following a specific pattern:
+Seven specialized agents, each following a specific pattern, plus an orchestrator that routes to them:
 
 #### Pattern Levels
 
@@ -69,8 +86,8 @@ Six specialized agents, each following a specific pattern:
 |-------|---------|-------|---------|
 | **1** | Search + LLM | 2 | Blog Scout: `search(topic) → call_llm()` |
 | **3** | Fixed Pipeline | 3 | Repo Onboarding: `fetch_repo() → search() → call_llm()` |
-| **4** | ReAct + Guardrail | 4 | Issue Planner: loop with guardrail against code generation |
-| **5** | Score → Filter → Analyze | 3 | Do I Care?: score all → filter top 3 → analyze |
+| **4** | Multi-step fixed pipeline + guardrail | 4 | Issue Planner: sequential steps with a guardrail against code generation |
+| **5** | Score → Filter → Analyze, or combine other agents | 3 | Do I Care?: score all → filter top 3 → analyze |
 
 #### Agent Descriptions
 
@@ -109,7 +126,7 @@ Input:  cve_id or software_name
 Output: dict with severity, exploitability, recommendations
 ```
 
-**4. Issue Fix Planner (Level 4 - ReAct Loop)**
+**4. Issue Fix Planner (Level 4 - multi-step fixed pipeline)**
 ```
 Input:  issue_url (GitHub issue)
         ↓
@@ -152,24 +169,22 @@ Output: dict with skill_gaps, job_suggestions, project_idea
 Shared modules used by all agents. No duplication—each agent imports from core/.
 
 #### core/llm.py
-**Purpose:** Unified LLM interface (Groq primary + HF fallback)
+**Purpose:** Unified LLM interface (OpenAI, retried once on failure)
 
 ```python
 call_llm(
     prompt: str,
     system: str = None,
-    model: str = "default",
-    temperature: float = 0.7,
-    max_tokens: int = 2048
+    model: str = "default"
 ) → str
 ```
 
 **Flow:**
-1. Try Groq API (primary)
-2. On failure/timeout → fallback to HF Inference
-3. Return LLM response
+1. Call OpenAI API (`gpt-4o-mini`)
+2. On failure → retry once
+3. Return LLM response, or raise `LLMUnavailableError` if both attempts fail
 
-**Secrets:** `GROQ_API_KEY`, `HF_TOKEN` from `.env`
+**Secrets:** `OPENAI_API_KEY` from `.env`
 
 ---
 
@@ -212,60 +227,94 @@ fetch_pr(pr_url: str) → dict
 
 **Secrets:** `GITHUB_TOKEN` (optional)
 
----
-
-#### core/agent.py
-**Purpose:** ReAct-pattern agent loop (used by Level 4+ agents)
-
-```python
-run_agent(
-    task: str,
-    tools: dict,  # {"tool_name": callable, ...}
-    max_steps: int = 4,
-    verbose: bool = False
-) → str
-```
-
-**Loop:**
-```
-for step in range(max_steps):
-    plan = call_llm(build_plan_prompt(task, history))
-    if plan indicates completion:
-        return plan.output
-    tool_call = parse_tool_call(plan)
-    result = tools[tool_call.name](*tool_call.args)
-    history.append((plan, result))
-return summarize_history(history)
-```
-
-**Key Properties:**
-- Max 4 steps per task
-- Tool calling via LLM (parse from response text)
-- History tracking for context
-- Optional verbose output
+**Rate limit awareness:** caches the `X-RateLimit-Remaining`/`X-RateLimit-Reset` headers GitHub returns
+and fails fast with a clear `GitHubAPIError` when the budget is nearly exhausted, instead of silently
+burning through it mid-request. Also logs a one-time warning if `GITHUB_TOKEN` reports OAuth scopes
+broader than the recommended read-only `public_repo`.
 
 ---
 
-#### core/memory.py (Optional)
-**Purpose:** Optional persistent memory layer for agents
+#### core/harness.py
+**Purpose:** A minimal, from-scratch tool-calling agent harness (no LangChain/LangGraph) built on
+OpenAI's native function calling. "Agent = Model + Harness": the model supplies judgment, this module
+supplies everything else.
 
 ```python
-save_memory(key: str, value: dict) → None
-load_memory(key: str) → dict
-clear_memory() → None
+Tool(name, description, parameters, run, validate=None)
+  # validate(args, task) -> bool: optional per-call guardrail; a `False` blocks execution
+  # without spending a real tool call, e.g. to reject an ungrounded input
+
+run_harness(task: str, tools: list[Tool], system_prompt: str, max_steps: int = 4) → HarnessResult
+  # HarnessResult: {"final_message": str, "tool_calls": [...], "steps_used": int}
 ```
 
-**Usage:** Agents can optionally cache analysis results, search outputs, etc.
+**Flow:**
+1. The model sees the task and the tool registry (as OpenAI function schemas) and decides, step by
+   step, whether to call a tool or answer directly - the harness never hardcodes which tool runs when
+2. Each requested tool call is validated (if a `validate` hook is set), executed, and its result fed
+   back to the model; a failing tool is caught and reported as data, not raised, so one bad call
+   doesn't abort the run
+3. The loop ends when the model responds without requesting a tool call, or after `max_steps` - at the
+   step limit the model is asked for a best-effort final answer using only what it already gathered
+
+This replaces the project's earlier `core/agent.py` ReAct-loop prototype, which was unused by any agent,
+had a bug where parsed tool arguments were silently discarded, and was removed.
+
+---
+
+#### agents/orchestrator/logic.py
+**Purpose:** Routes a free-text task to 1-2 specialist agents and synthesizes their results, running
+entirely on `core/harness.py`
+
+```python
+run_orchestrator(task: str) → dict
+  # Returns: {"report": str, "specialists_used": [...], "status": "success"|"error"}
+```
+
+**Flow:**
+1. Each of the 7 specialists is wrapped as a `Tool` (single `input: string` argument) and registered
+   with the harness alongside a system prompt describing the orchestrator's job
+2. Every tool's `validate` hook is `_input_matches_task()`, which sanity-checks the model's extracted
+   input against the original task text - this blocks a redirected target introduced by prompt
+   injection in content a tool fetched earlier in the same run
+3. `run_harness()` runs the loop (capped at 3 steps): the model picks 1-2 tools, sees their results,
+   and writes its own synthesized Markdown report as the final (non-tool-call) message
+4. `run_orchestrator()` translates the harness's `HarnessResult` back into the app's existing
+   `{report, specialists_used, status}` contract, so `app.py` and the eval suite didn't need to change
+
+---
+
+#### core/memory.py
+**Purpose:** The "memory" in agent = LLM + tools + memory. In-process only, bounded, no filesystem -
+safe on shared, ephemeral hosts (Streamlit Cloud) where disk is shared by all visitors and wiped on restart.
+
+```python
+SessionMemory(max_entries=20)       # one visitor's run history: record / recent / has_input / clear
+ResultCache(ttl_seconds, max_entries)  # shared LRU + TTL, thread-safe: get / put
+run_with_memory(agent, input, fn, cache, session, before_run) → (output, cache_hit)
+```
+
+**Two tiers, kept separate on purpose:**
+- **Session memory** - private to a visitor's session (`st.session_state`). Every agent run is recorded
+  here; the orchestrator's `recall_memory` tool reads it so follow-ups ("do the same for the second
+  repo") work.
+- **Shared result cache** - one instance for all sessions (`st.cache_resource`), only for agents whose
+  output depends solely on a public URL (`CACHEABLE_AGENTS`: repo_onboarding, cve_impact,
+  security_audit, issue_fix_planner). Errors are never cached. On a hit the agent doesn't run, and
+  `before_run` (the rate limiter) isn't consulted, so hits don't cost the visitor a request.
+
+**Security notes:** recalled memory is treated as untrusted data in the orchestrator prompt (it
+originates from public content). Follow-up tool calls may reuse an input the visitor already ran this
+session (`SessionMemory.has_input`), but any other input must still appear in the task text.
 
 ---
 
 ### 4. External APIs
 
-#### Groq (Primary LLM)
-- **Model:** llama2-70b-4096 or similar
-- **Cost:** Free tier available
-- **Rate Limit:** 30 calls/min on free tier
-- **Fallback:** HF Inference if rate limited
+#### OpenAI (LLM)
+- **Model:** `gpt-4o-mini`
+- **Cost:** Pay-as-you-go, cheapest current chat-completion tier
+- **Retry:** One retry on failure before raising `LLMUnavailableError`
 
 #### Tavily (Search API)
 - **Model:** Web search with AI summaries
@@ -276,12 +325,6 @@ clear_memory() → None
 - **Rate Limit:** 60/hr (unauthenticated), 5000/hr (authenticated)
 - **Costs:** Free, read-only operations
 - **Use Cases:** fetch repos, issues, PRs, file trees
-
-#### Hugging Face Inference API
-- **Purpose:** Fallback LLM if Groq fails
-- **Model:** Choices vary (mistral, llama, etc.)
-- **Cost:** Free tier available
-- **Rate Limit:** ~8 req/min on free tier
 
 ---
 
@@ -302,14 +345,14 @@ User Input: "machine learning"
     │       prompt="Given these search results, suggest 5 blog ideas...",
     │       system="You are a blog idea scout..."
     │   )
-    │   ├─→ Try Groq API
+    │   ├─→ Call OpenAI API (gpt-4o-mini)
     │   └─→ Returns LLM-generated ideas
     │
-    └─→ Output to Gradio
+    └─→ Output to Streamlit
         Display: "### Idea 1: ... with source link"
 ```
 
-### Example 2: Issue Fix Planner (ReAct Loop)
+### Example 2: Issue Fix Planner (multi-step fixed pipeline)
 
 ```
 User Input: "https://github.com/user/repo/issues/123"
@@ -323,13 +366,13 @@ User Input: "https://github.com/user/repo/issues/123"
     │   └─→ Related discussions, docs, solutions
     │
     ├─→ Step 3: core/llm.py::call_llm("What files affected?")
-    │   └─→ "Likely files: core/agent.py, agents/blog_scout/logic.py"
+    │   └─→ "Likely files: agents/issue_fix_planner/logic.py, core/github_tool.py"
     │
     ├─→ Step 4: core/llm.py::call_llm("Implementation plan?")
-    │   └─→ "Plan: 1. Modify core/agent.py to... 2. Add tests..."
+    │   └─→ "Plan: 1. Modify agents/issue_fix_planner/logic.py to... 2. Add tests..."
     │   └─→ GUARDRAIL: No code snippets generated
     │
-    └─→ Output to Gradio
+    └─→ Output to Streamlit
         Display: "# Implementation Plan\n## Files to Touch\n..."
 ```
 
@@ -348,16 +391,15 @@ User Input: "https://github.com/user/repo/issues/123"
 - Core functions evolve to support new agent patterns
 
 ### 3. **Graceful Fallbacks**
-- Groq → HF Inference (LLM)
+- OpenAI call retried once (LLM)
 - Tavily → DuckDuckGo (Search)
 - Authenticated → Unauthenticated (GitHub)
-- Ensures agents work even when primary services fail
+- Ensures agents work even when a primary service hiccups
 
 ### 4. **No Persistence**
-- Each run is independent
-- No database, cache, or session state
-- Results live only in the current execution
-- Optional: `core/memory.py` for agent-level caching (not used by default)
+- No database and no files; memory is in-process only (`core/memory.py`) and bounded
+- Per-session run history (never shared) + a shared TTL'd result cache for public-URL agents
+- Nothing survives a restart, by design (safe on shared, ephemeral hosts like Streamlit Cloud)
 
 ### 5. **Evaluation-Driven**
 - Each agent has `evals.jsonl` with test cases
@@ -373,10 +415,9 @@ User Input: "https://github.com/user/repo/issues/123"
 1. **Create directory:** `agents/my_agent/`
 2. **Implement files:**
    - `prompts.py` — system & user prompts
-   - `logic.py` — agent logic (imports from `core/`)
-   - `app.py` — Gradio interface
+   - `logic.py` — agent logic (imports from `core/`, smoke test in `__main__`)
    - `evals.jsonl` — test cases (3-5 per agent)
-3. **Add to dashboard:** Import in root `app.py`, add tab
+3. **Add to dashboard:** Import in root `app.py`, add a tab via `render_agent_tab()`
 4. **Test:** Run `logic.py` smoke test, add evals
 
 ### Extending Core APIs
@@ -393,9 +434,8 @@ If multiple agents need a new capability:
 
 | Component | Latency | Throughput | Notes |
 |-----------|---------|-----------|-------|
-| **Gradio UI** | ~100ms | N/A | Interface overhead |
-| **LLM (Groq)** | 1-5s | 30 req/min | Primary bottleneck |
-| **LLM (HF Fallback)** | 3-10s | 8 req/min | Slower but free |
+| **Streamlit UI** | ~100ms | N/A | Interface overhead + rerun on submit |
+| **LLM (OpenAI gpt-4o-mini)** | 1-5s | Depends on account tier | Primary bottleneck; +1 attempt if retried |
 | **Search (Tavily)** | 500-2000ms | 1000/month | Cached web search |
 | **Search (DuckDuckGo)** | 1-3s | Unlimited | Fallback, slower |
 | **GitHub API** | 200-800ms | 60-5000 req/hr | Depends on auth |
@@ -412,10 +452,9 @@ If multiple agents need a new capability:
 - Fallback APIs don't require keys
 
 ### API Key Scopes
-- **GROQ_API_KEY:** Inference only (read-only model access)
+- **OPENAI_API_KEY:** Inference only (read-only model access)
 - **TAVILY_API_KEY:** Search only (no write permissions)
 - **GITHUB_TOKEN:** Optional, `public_repo` scope recommended (read-only)
-- **HF_TOKEN:** Inference only
 
 ### Deployment Security
 - Secrets stored in HF Space UI (Settings → Secrets), not in code
@@ -429,42 +468,44 @@ If multiple agents need a new capability:
 ### Logging
 - Each agent has `logger = logging.getLogger(__name__)`
 - Logs are printed to stdout (no persistent logging)
-- Use `verbose=True` in `core/agent.py` for detailed tracing
+- User-facing error messages are generic; full exception detail is only in the server-side logs
 
 ### Error Handling
 - Graceful degradation: fallback APIs kick in on primary failure
 - Errors returned in response dict (e.g., `{"error_message": "...", "status": "error"}`)
-- UI displays errors with ❌ emoji prefix
+- UI displays errors with a `:material/error:` icon prefix; missing input shows an `st.warning`
 
 ### Testing
 - Smoke tests: `if __name__ == "__main__"` in each module
 - Evaluation tests: `evals/run_evals.py` runs all agents against test cases
-- No pytest (keep it simple)
+- Unit tests: `pytest` (mocked API calls) covering `core/` and each agent's `logic.py`
 
 ---
 
 ## Future Enhancements (Out of Scope)
 
-- 🔴 Multi-agent collaboration / handoff
-- 🔴 Persistent memory / database
+- ✅ ~~Multi-agent collaboration / handoff~~ - added via `agents/orchestrator/`
+- ✅ ~~Rate limiting / quota management~~ - partial: GitHub rate-limit-budget awareness
+  (`core/github_tool.py`) and a per-session cooldown/cap in the Streamlit UI (`app.py`); no
+  account-level spend cap or real auth
+- ✅ ~~Memory~~ - in-process session memory + shared result cache (`core/memory.py`)
+- 🔴 Durable memory / database
 - 🔴 Scheduled/cron jobs
-- 🔴 Rate limiting / quota management
 - 🔴 Advanced logging / telemetry
 - 🔴 User authentication
 - 🔴 Async/parallel execution
-- 🔴 Advanced Gradio UI features (state, progress bars, etc.)
+- 🔴 Advanced Streamlit UI features (progress bars, fragments, etc.)
 
-These are explicitly excluded per design spec §8 (constraints).
+These are explicitly excluded per the design philosophy (see [DESIGN.md](./DESIGN.md)), except where
+marked ✅ above.
 
 ---
 
 ## References
 
-- **Design Spec:** [micro-agents-design-spec.md](./micro-agents-design-spec.md)
-- **Deployment:** [deployment.md](./deployment.md)
+- **Design:** [DESIGN.md](./DESIGN.md)
 - **README:** [README.md](./README.md)
 - **External APIs:**
-  - Groq: https://console.groq.com/docs
+  - OpenAI: https://platform.openai.com/docs
   - Tavily: https://tavily.com
   - GitHub: https://docs.github.com/en/rest
-  - Hugging Face: https://huggingface.co/inference-api

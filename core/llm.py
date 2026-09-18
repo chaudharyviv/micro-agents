@@ -2,22 +2,17 @@
 
 import os
 from dotenv import load_dotenv
-from groq import Groq as GroqClient
-from groq import APIError as GroqAPIError
-try:
-    from openai import OpenAI
-except ImportError:
-    OpenAI = None
+from openai import OpenAI, APIError as OpenAIAPIError
 
 
 MODEL_MAP = {
-    "default": "openai/gpt-oss-20b",
-    "large": "openai/gpt-oss-120b",
+    "default": "gpt-4o-mini",
+    "large": "gpt-4o-mini",
 }
 
 
 class LLMUnavailableError(Exception):
-    """Raised when both primary and fallback LLM backends are unavailable."""
+    """Raised when the OpenAI backend is unavailable after retrying."""
 
     pass
 
@@ -26,7 +21,7 @@ def call_llm(prompt: str, system: str = None, model: str = "default") -> str:
     """
     Call an LLM with the given prompt.
 
-    Attempts Groq API first, then falls back to Hugging Face Inference API.
+    Uses the OpenAI API (gpt-4o-mini), retrying once on failure.
 
     Args:
         prompt: The user prompt to send to the LLM
@@ -37,68 +32,40 @@ def call_llm(prompt: str, system: str = None, model: str = "default") -> str:
         The LLM's response as a string
 
     Raises:
-        LLMUnavailableError: If both Groq and HuggingFace backends fail
+        LLMUnavailableError: If the OpenAI backend fails on both attempts
     """
     load_dotenv()
     model_name = MODEL_MAP.get(model, model)
-    groq_key = os.getenv("GROQ_API_KEY")
-    hf_key = os.getenv("HF_TOKEN")
+    api_key = os.getenv("OPENAI_API_KEY")
 
-    # Try Groq first
-    if groq_key:
+    if not api_key:
+        raise LLMUnavailableError(
+            "OpenAI backend unavailable. Ensure OPENAI_API_KEY is set in environment."
+        )
+
+    client = OpenAI(api_key=api_key)
+    messages = [
+        {"role": "system", "content": system or "You are a helpful assistant."},
+        {"role": "user", "content": prompt},
+    ]
+
+    last_error = None
+    for attempt in range(2):
         try:
-            client = GroqClient(api_key=groq_key)
             response = client.chat.completions.create(
                 model=model_name,
-                messages=[
-                    {"role": "system", "content": system or "You are a helpful assistant."},
-                    {"role": "user", "content": prompt},
-                ],
+                messages=messages,
                 temperature=0.7,
             )
-            print(f"[LLM] Groq backend served request (model: {model_name})")
+            print(f"[LLM] OpenAI backend served request (model: {model_name}, attempt: {attempt + 1})")
             return response.choices[0].message.content
-        except (GroqAPIError, Exception) as e:
-            print(f"[LLM] Groq failed: {e}, attempting HuggingFace fallback...")
+        except (OpenAIAPIError, Exception) as e:
+            last_error = e
+            print(f"[LLM] OpenAI attempt {attempt + 1} failed: {e}")
 
-    # Try HuggingFace Inference API via OpenAI-compatible endpoint
-    if hf_key and OpenAI:
-        try:
-            client = OpenAI(
-                api_key=hf_key,
-                base_url="https://router.huggingface.co/v1",
-            )
-            # Try multiple models for compatibility
-            hf_models = [
-                "meta-llama/Llama-2-7b-chat-hf",
-                "mistralai/Mistral-7B-Instruct-v0.2",
-                "NousResearch/Nous-Hermes-2-Mixtral-8x7B-DPO",
-            ]
-
-            for model_id in hf_models:
-                try:
-                    response = client.chat.completions.create(
-                        model=model_id,
-                        messages=[
-                            {"role": "system", "content": system or "You are a helpful assistant."},
-                            {"role": "user", "content": prompt},
-                        ],
-                        max_tokens=512,
-                    )
-                    print(f"[LLM] HuggingFace backend served request (model: {model_id})")
-                    return response.choices[0].message.content
-                except Exception:
-                    continue
-
-            # All models failed
-            raise Exception("No HuggingFace models available")
-        except Exception as e:
-            print(f"[LLM] HuggingFace failed: {e}")
-
-    raise LLMUnavailableError(
-        "Both Groq and HuggingFace backends unavailable. "
-        "Ensure GROQ_API_KEY or HF_TOKEN is set in environment."
-    )
+    # Full exception detail is logged above for debugging; the raised message stays generic
+    # since callers surface it directly to end users.
+    raise LLMUnavailableError("OpenAI backend unavailable after retrying. Please try again shortly.")
 
 
 if __name__ == "__main__":

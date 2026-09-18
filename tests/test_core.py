@@ -12,61 +12,56 @@ from core.github_tool import fetch_repo, fetch_issue, fetch_pr, GitHubAPIError
 class TestLLM:
     """Tests for core/llm.py"""
 
-    def test_call_llm_groq_success(self, mocker):
-        """Test successful call via Groq API."""
-        # Mock environment
-        mocker.patch.dict("os.environ", {"GROQ_API_KEY": "test-groq-key"})
+    def test_call_llm_openai_success(self, mocker):
+        """Test successful call via OpenAI API."""
+        mocker.patch.dict("os.environ", {"OPENAI_API_KEY": "test-openai-key"})
 
-        # Mock Groq client
-        mock_groq_client = MagicMock()
+        mock_client = MagicMock()
         mock_response = MagicMock()
         mock_response.choices[0].message.content = "Hello"
-        mock_groq_client.chat.completions.create.return_value = mock_response
+        mock_client.chat.completions.create.return_value = mock_response
 
-        mock_groq = MagicMock(return_value=mock_groq_client)
-        mocker.patch("core.llm.GroqClient", mock_groq)
-
-        result = call_llm("Say hello")
-        assert result == "Hello"
-        mock_groq.assert_called_once_with(api_key="test-groq-key")
-
-    def test_call_llm_groq_fallback_to_hf(self, mocker):
-        """Test fallback to HuggingFace when Groq fails."""
-        mocker.patch.dict(
-            "os.environ", {"GROQ_API_KEY": "test-groq-key", "HF_TOKEN": "test-hf-key"}
-        )
-
-        # Mock Groq failure
-        mock_groq = MagicMock(side_effect=Exception("Groq error"))
-        mocker.patch("core.llm.GroqClient", mock_groq)
-
-        # Mock HuggingFace OpenAI-compatible endpoint success
-        mock_hf_response = MagicMock()
-        mock_hf_response.choices[0].message.content = "Hello from HF"
-        mock_hf_client = MagicMock()
-        mock_hf_client.chat.completions.create.return_value = mock_hf_response
-        mock_openai = MagicMock(return_value=mock_hf_client)
+        mock_openai = MagicMock(return_value=mock_client)
         mocker.patch("core.llm.OpenAI", mock_openai)
 
         result = call_llm("Say hello")
-        assert result == "Hello from HF"
+        assert result == "Hello"
+        mock_openai.assert_called_once_with(api_key="test-openai-key")
 
-    def test_call_llm_both_backends_fail(self, mocker):
-        """Test LLMUnavailableError when both backends fail."""
-        mocker.patch.dict(
-            "os.environ", {"GROQ_API_KEY": "test-groq-key", "HF_TOKEN": "test-hf-key"}
-        )
+    def test_call_llm_retries_once_on_failure(self, mocker):
+        """Test that a failed first attempt is retried before succeeding."""
+        mocker.patch.dict("os.environ", {"OPENAI_API_KEY": "test-openai-key"})
 
-        # Mock both to fail
-        mocker.patch("core.llm.GroqClient", side_effect=Exception("Groq error"))
-        mock_openai = MagicMock(side_effect=Exception("OpenAI error"))
+        mock_response = MagicMock()
+        mock_response.choices[0].message.content = "Hello after retry"
+        mock_client = MagicMock()
+        mock_client.chat.completions.create.side_effect = [
+            Exception("Transient error"),
+            mock_response,
+        ]
+
+        mock_openai = MagicMock(return_value=mock_client)
+        mocker.patch("core.llm.OpenAI", mock_openai)
+
+        result = call_llm("Say hello")
+        assert result == "Hello after retry"
+        assert mock_client.chat.completions.create.call_count == 2
+
+    def test_call_llm_both_attempts_fail(self, mocker):
+        """Test LLMUnavailableError when both attempts fail."""
+        mocker.patch.dict("os.environ", {"OPENAI_API_KEY": "test-openai-key"})
+
+        mock_client = MagicMock()
+        mock_client.chat.completions.create.side_effect = Exception("OpenAI error")
+
+        mock_openai = MagicMock(return_value=mock_client)
         mocker.patch("core.llm.OpenAI", mock_openai)
 
         with pytest.raises(LLMUnavailableError):
             call_llm("Say hello")
 
     def test_call_llm_no_keys_configured(self, mocker):
-        """Test LLMUnavailableError when no API keys are available."""
+        """Test LLMUnavailableError when no API key is available."""
         mocker.patch.dict("os.environ", {}, clear=True)
 
         with pytest.raises(LLMUnavailableError):
@@ -74,39 +69,39 @@ class TestLLM:
 
     def test_call_llm_model_mapping(self, mocker):
         """Test that model parameter uses MODEL_MAP correctly."""
-        mocker.patch.dict("os.environ", {"GROQ_API_KEY": "test-groq-key"})
+        mocker.patch.dict("os.environ", {"OPENAI_API_KEY": "test-openai-key"})
 
-        mock_groq_client = MagicMock()
+        mock_client = MagicMock()
         mock_response = MagicMock()
         mock_response.choices[0].message.content = "Response"
-        mock_groq_client.chat.completions.create.return_value = mock_response
+        mock_client.chat.completions.create.return_value = mock_response
 
-        mock_groq = MagicMock(return_value=mock_groq_client)
-        mocker.patch("core.llm.GroqClient", mock_groq)
+        mock_openai = MagicMock(return_value=mock_client)
+        mocker.patch("core.llm.OpenAI", mock_openai)
 
         call_llm("prompt", model="large")
 
         # Verify the correct model from MODEL_MAP was used
-        call_args = mock_groq_client.chat.completions.create.call_args
+        call_args = mock_client.chat.completions.create.call_args
         assert call_args[1]["model"] == MODEL_MAP["large"]
 
     def test_call_llm_with_system_message(self, mocker):
         """Test that system message is passed correctly."""
-        mocker.patch.dict("os.environ", {"GROQ_API_KEY": "test-groq-key"})
+        mocker.patch.dict("os.environ", {"OPENAI_API_KEY": "test-openai-key"})
 
-        mock_groq_client = MagicMock()
+        mock_client = MagicMock()
         mock_response = MagicMock()
         mock_response.choices[0].message.content = "Response"
-        mock_groq_client.chat.completions.create.return_value = mock_response
+        mock_client.chat.completions.create.return_value = mock_response
 
-        mock_groq = MagicMock(return_value=mock_groq_client)
-        mocker.patch("core.llm.GroqClient", mock_groq)
+        mock_openai = MagicMock(return_value=mock_client)
+        mocker.patch("core.llm.OpenAI", mock_openai)
 
         custom_system = "You are a code expert"
         call_llm("Write Python", system=custom_system)
 
         # Verify system message was used
-        call_args = mock_groq_client.chat.completions.create.call_args
+        call_args = mock_client.chat.completions.create.call_args
         messages = call_args[1]["messages"]
         assert messages[0]["role"] == "system"
         assert messages[0]["content"] == custom_system

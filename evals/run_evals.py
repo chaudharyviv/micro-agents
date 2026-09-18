@@ -18,6 +18,7 @@ from agents.cve_impact.logic import analyze_cve_impact
 from agents.issue_fix_planner.logic import run_issue_fix_planner
 from agents.do_i_care.logic import run_do_i_care
 from agents.opportunity_scout.logic import run_opportunity_scout
+from agents.orchestrator.logic import run_orchestrator
 
 
 def load_evals(agent_name: str) -> list[dict]:
@@ -76,6 +77,11 @@ def check_result(output, rule: str) -> bool:
         if isinstance(output, dict):
             return "error_message" in output
         return False
+
+    elif rule == "has_report":
+        if isinstance(output, dict) and output.get("status") == "success":
+            return bool(output.get("report")) and len(output.get("report", "")) > 30
+        return isinstance(output, dict) and "error_message" in output
 
     elif rule == "manual":
         # Manual inspection - assume pass if no error
@@ -240,6 +246,21 @@ def evaluate_opportunity_scout(test_case: dict) -> bool:
         return False
 
 
+def evaluate_orchestrator(test_case: dict) -> bool:
+    """Evaluate Orchestrator agent."""
+    try:
+        task = test_case.get("input")
+        if not task or not task.strip():
+            return check_result(None, test_case.get("check", "input_validation"))
+
+        output = run_orchestrator(task.strip())
+        rule = test_case.get("check", "has_report")
+        return check_result(output, rule)
+    except Exception as e:
+        print(f"    ❌ Exception: {str(e)[:80]}")
+        return False
+
+
 def run_agent_evals(
     agent_name: str, eval_func, verbose: bool = False
 ) -> dict:
@@ -296,6 +317,7 @@ def run_evals(verbose: bool = False):
         ("issue_fix_planner", evaluate_issue_planner),
         ("do_i_care", evaluate_do_i_care),
         ("opportunity_scout", evaluate_opportunity_scout),
+        ("orchestrator", evaluate_orchestrator),
     ]
 
     results = {}
