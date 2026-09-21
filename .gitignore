@@ -148,3 +148,5 @@ DESIGN.md
 EVALUATION_GUIDE.md
 .claude/
 .kiro/
+# Optional persisted usage counters (BUDGET_STATE_FILE)
+.budget_state.json

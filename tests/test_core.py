@@ -26,7 +26,8 @@ class TestLLM:
 
         result = call_llm("Say hello")
         assert result == "Hello"
-        mock_openai.assert_called_once_with(api_key="test-openai-key")
+        # The SDK's silent retries are off (we count every attempt ourselves) and calls have a timeout.
+        mock_openai.assert_called_once_with(api_key="test-openai-key", timeout=60, max_retries=0)
 
     def test_call_llm_retries_once_on_failure(self, mocker):
         """Test that a failed first attempt is retried before succeeding."""

@@ -1,6 +1,5 @@
 """Core logic for Repo Onboarding agent."""
 
-import json
 import logging
 import sys
 from pathlib import Path
@@ -10,7 +9,9 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from core.github_tool import fetch_repo, GitHubAPIError
 from core.llm import call_llm, LLMUnavailableError
+from core.llm_utils import extract_json, wrap_untrusted
 from agents.repo_onboarding.prompts import (
+    RESPONSE_SCHEMA,
     SYSTEM_PROMPT,
     USER_PROMPT_TEMPLATE,
 )
@@ -69,13 +70,13 @@ README Content (first 2000 chars):
 """
 
     user_prompt = USER_PROMPT_TEMPLATE.format(
-        repo_url=repo_url, repo_data=formatted_repo_data
+        repo_url=repo_url, repo_data=wrap_untrusted(formatted_repo_data)
     )
 
     # Call LLM to generate guide
     logger.info("Calling LLM to generate onboarding guide")
     try:
-        llm_response = call_llm(user_prompt, system=SYSTEM_PROMPT)
+        llm_response = call_llm(user_prompt, system=SYSTEM_PROMPT, schema=RESPONSE_SCHEMA, schema_name="onboarding_guide")
         logger.info(f"LLM response: {llm_response[:100]}...")
     except LLMUnavailableError as e:
         logger.error(f"LLM call failed: {e}")
@@ -94,7 +95,7 @@ README Content (first 2000 chars):
         retry_prompt = user_prompt + "\n\n" + error_msg
 
         try:
-            llm_response = call_llm(retry_prompt, system=SYSTEM_PROMPT)
+            llm_response = call_llm(retry_prompt, system=SYSTEM_PROMPT, schema=RESPONSE_SCHEMA, schema_name="onboarding_guide")
             guide = _parse_guide(llm_response, repo_url)
         except Exception as e:
             logger.error(f"LLM retry failed: {e}")
@@ -116,28 +117,14 @@ def _parse_guide(response: str, repo_url: str) -> Optional[dict]:
     Parse JSON response from LLM.
 
     Args:
-        response: LLM's JSON response (may be wrapped in markdown code blocks)
+        response: LLM's JSON response
         repo_url: Original repository URL for context
 
     Returns:
-        Parsed guide dict, or None if parsing fails
+        Parsed guide dict (project_structure normalized to a dict), or None if parsing fails
     """
     try:
-        # Extract JSON from markdown code blocks if present
-        clean_response = response.strip()
-        if clean_response.startswith("```"):
-            lines = clean_response.split("\n")
-            json_lines = []
-            in_json = False
-            for line in lines:
-                if line.startswith("```"):
-                    in_json = not in_json
-                    continue
-                if in_json or (not line.startswith("```") and json_lines):
-                    json_lines.append(line)
-            clean_response = "\n".join(json_lines).strip()
-
-        guide = json.loads(clean_response)
+        guide = extract_json(response)
 
         if not isinstance(guide, dict):
             logger.error("Response is not a JSON object")
@@ -155,15 +142,30 @@ def _parse_guide(response: str, repo_url: str) -> Optional[dict]:
             logger.warning(f"Guide missing required fields: {required_fields}")
             return None
 
+        guide["project_structure"] = _structure_to_dict(guide.get("project_structure"))
+
         logger.info(f"Successfully parsed onboarding guide for {guide.get('project_name')}")
         return guide
 
-    except json.JSONDecodeError as e:
+    except ValueError as e:
         logger.error(f"JSON parse error: {e}")
         return None
     except Exception as e:
         logger.error(f"Parse error: {e}")
         return None
+
+
+def _structure_to_dict(structure) -> dict:
+    """project_structure as {path: description}, from the model's [{path, description}] (or a dict)."""
+    if isinstance(structure, dict):
+        return {str(k): str(v) for k, v in structure.items()}
+    if isinstance(structure, list):
+        return {
+            str(e["path"]): str(e.get("description", ""))
+            for e in structure
+            if isinstance(e, dict) and e.get("path")
+        }
+    return {}
 
 
 if __name__ == "__main__":

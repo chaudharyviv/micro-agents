@@ -1,5 +1,21 @@
 """Prompts for Repo Onboarding agent."""
 
+from core.llm_utils import STR, arr, obj
+
+# Strict structured-output schema. project_structure is a list of {path, description} because strict
+# schemas can't express a dict with arbitrary keys; the parser turns it back into a dict.
+RESPONSE_SCHEMA = obj(
+    project_name=STR,
+    overview=STR,
+    tech_stack=arr(STR),
+    setup_steps=arr(STR),
+    project_structure=arr(obj(path=STR, description=STR)),
+    key_concepts=arr(STR),
+    development_workflow=obj(branching_strategy=STR, testing=STR, building=STR, deploying=STR),
+    common_tasks=obj(run_tests=STR, start_dev_server=STR, build=STR, lint=STR),
+    resources=arr(STR),
+)
+
 SYSTEM_PROMPT = """You are an expert technical onboarding specialist. Your role is to analyze
 GitHub repositories and create comprehensive, beginner-friendly contributor onboarding guides.
 
@@ -27,9 +43,7 @@ USER_PROMPT_TEMPLATE = """Please create a comprehensive onboarding guide for thi
 Repository URL: {repo_url}
 
 Repository Data:
-<untrusted_data>
 {repo_data}
-</untrusted_data>
 
 Generate the guide as a JSON object with the following structure:
 {{
@@ -41,10 +55,10 @@ Generate the guide as a JSON object with the following structure:
     "Step 2: description",
     "..."
   ],
-  "project_structure": {{
-    "directory": "description of what's in this directory",
-    "...": "..."
-  }},
+  "project_structure": [
+    {{"path": "directory or file", "description": "what's in it"}},
+    "..."
+  ],
   "key_concepts": [
     "Important architectural pattern or design decision",
     "..."
@@ -66,7 +80,7 @@ Generate the guide as a JSON object with the following structure:
   ]
 }}
 
-Ensure all JSON is valid and complete. Do not invent or hallucinate information about the repository.
+Use an empty string for any command or field the repository data doesn't cover. Do not invent or hallucinate information about the repository.
 Only use the provided repository data to construct the guide."""
 
 DEFAULT_REPOS = [

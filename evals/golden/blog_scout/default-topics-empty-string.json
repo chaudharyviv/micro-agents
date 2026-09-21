@@ -1,0 +1,32 @@
+{
+  "agent": "blog_scout",
+  "id": "default-topics-empty-string",
+  "input": "",
+  "recorded_at": "2026-09-21T05:29:33+00:00",
+  "output": [
+    {
+      "title": "Building the Future: The Rise of Internal Developer Platforms",
+      "pitch": "Explore how internal developer platforms are transforming software development by enhancing autonomy and streamlining workflows for engineering teams.",
+      "source_url": "https://www.redhat.com/en/blog/strategic-importance-platform-engineering-modern-software-development",
+      "source_title": "The strategic importance of platform engineering in modern software development"
+    },
+    {
+      "title": "AI-Native Transformation: The New Era of Platform Engineering",
+      "pitch": "Delve into the shift from cloud-native to AI-native platform engineering and its implications for software development practices and team structures.",
+      "source_url": "https://platformengineering.org/blog/announcing-the-state-of-platform-engineering-vol-4",
+      "source_title": "Announcing the State of Platform Engineering Report Vol 4"
+    },
+    {
+      "title": "Agent Engineering: From Prototype to Production",
+      "pitch": "Uncover the critical steps and best practices for transitioning AI agents from demo prototypes to robust, production-ready systems.",
+      "source_url": "https://activewizards.com/blog/ai-agent-engineering-the-definitive-guide",
+      "source_title": "Agent Engineering Guide: AI Agent Architecture, Frameworks, and Production Systems"
+    },
+    {
+      "title": "The Future of Software Development: Embracing Platform Engineering",
+      "pitch": "Investigate how platform engineering is reshaping the software landscape, focusing on efficiency, scalability, and developer experience.",
+      "source_url": "https://cloud.google.com/blog/products/application-modernization/new-platform-engineering-research-report",
+      "source_title": "New platform engineering research report | Google Cloud Blog"
+    }
+  ]
+}

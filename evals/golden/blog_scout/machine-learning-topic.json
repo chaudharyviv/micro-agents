@@ -1,0 +1,26 @@
+{
+  "agent": "blog_scout",
+  "id": "machine-learning-topic",
+  "input": "machine learning",
+  "recorded_at": "2026-09-21T05:29:40+00:00",
+  "output": [
+    {
+      "title": "Demystifying Machine Learning: A Beginner's Guide for Software Engineers",
+      "pitch": "This blog post will break down the core concepts of machine learning, making it accessible for software engineers looking to expand their skill set into AI technologies.",
+      "source_url": "https://www.geeksforgeeks.org/machine-learning/machine-learning",
+      "source_title": "Machine Learning Tutorial - GeeksforGeeks"
+    },
+    {
+      "title": "The Four Pillars of Machine Learning: Understanding Supervised, Unsupervised, Semi-Supervised, and Reinforcement Learning",
+      "pitch": "By exploring the four main types of machine learning, this post will help software engineers choose the right approach for their projects and applications.",
+      "source_url": "https://www.coursera.org/articles/what-is-machine-learning",
+      "source_title": "What Is Machine Learning? Definition, Types, and Examples | Coursera"
+    },
+    {
+      "title": "Machine Learning in Action: Real-World Applications and Case Studies",
+      "pitch": "This article will showcase practical applications of machine learning across various industries, inspiring software engineers to implement these technologies in their own work.",
+      "source_url": "https://ischoolonline.berkeley.edu/blog/what-is-machine-learning",
+      "source_title": "What Is Machine Learning (ML)? Definition and Examples"
+    }
+  ]
+}

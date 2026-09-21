@@ -1,6 +1,5 @@
 """Core logic for Blog Idea Scout agent."""
 
-import json
 import logging
 import sys
 from pathlib import Path
@@ -11,10 +10,12 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from core.search import web_search
 from core.llm import call_llm
+from core.llm_utils import extract_json, wrap_untrusted
 from agents.blog_scout.prompts import (
     SYSTEM_PROMPT,
     USER_PROMPT_TEMPLATE,
     DEFAULT_TOPICS,
+    RESPONSE_SCHEMA,
 )
 
 
@@ -86,12 +87,12 @@ def scout_blog_ideas(topic: Optional[str] = None) -> list[dict]:
         ]
     )
 
-    user_prompt = USER_PROMPT_TEMPLATE.format(search_results=formatted_results)
+    user_prompt = USER_PROMPT_TEMPLATE.format(search_results=wrap_untrusted(formatted_results))
 
     # Call LLM to generate ideas
     logger.info("Calling LLM to generate blog ideas")
     try:
-        llm_response = call_llm(user_prompt, system=SYSTEM_PROMPT)
+        llm_response = call_llm(user_prompt, system=SYSTEM_PROMPT, schema=RESPONSE_SCHEMA, schema_name="blog_ideas")
         logger.info(f"LLM response: {llm_response[:100]}...")
     except Exception as e:
         logger.error(f"LLM call failed: {e}")
@@ -110,11 +111,11 @@ def scout_blog_ideas(topic: Optional[str] = None) -> list[dict]:
     if ideas is None:
         # Retry once
         logger.warning("Parse failed. Retrying with error message.")
-        error_msg = "Your previous response was not valid JSON. Please respond again with ONLY a JSON array."
+        error_msg = "Your previous response was not valid JSON. Please respond again with ONLY the JSON object."
         retry_prompt = user_prompt + "\n\n" + error_msg
 
         try:
-            llm_response = call_llm(retry_prompt, system=SYSTEM_PROMPT)
+            llm_response = call_llm(retry_prompt, system=SYSTEM_PROMPT, schema=RESPONSE_SCHEMA, schema_name="blog_ideas")
             ideas = _parse_ideas(llm_response, search_result_urls)
         except Exception as e:
             logger.error(f"LLM retry failed: {e}")
@@ -146,33 +147,18 @@ def _parse_ideas(response: str, search_result_urls: set) -> Optional[list[dict]]
     Parse JSON response from LLM.
 
     Args:
-        response: LLM's JSON response (may be wrapped in markdown code blocks)
+        response: LLM's JSON response: {"ideas": [...]} (a bare array is also accepted)
         search_result_urls: Set of valid URLs from search results
 
     Returns:
         Parsed list of ideas, or None if parsing fails
     """
     try:
-        # Extract JSON from markdown code blocks if present
-        clean_response = response.strip()
-        if clean_response.startswith("```"):
-            # Remove markdown code block wrapper
-            lines = clean_response.split("\n")
-            # Find the actual JSON content
-            json_lines = []
-            in_json = False
-            for line in lines:
-                if line.startswith("```"):
-                    in_json = not in_json
-                    continue
-                if in_json or (not line.startswith("```") and json_lines):
-                    json_lines.append(line)
-            clean_response = "\n".join(json_lines).strip()
-
-        ideas = json.loads(clean_response)
+        data = extract_json(response)
+        ideas = data.get("ideas") if isinstance(data, dict) else data
 
         if not isinstance(ideas, list):
-            logger.error("Response is not a JSON array")
+            logger.error("Response has no ideas array")
             return None
 
         # Validate each idea has required fields and URLs are from search results
@@ -204,7 +190,7 @@ def _parse_ideas(response: str, search_result_urls: set) -> Optional[list[dict]]
         logger.info(f"Successfully parsed {len(validated_ideas)} ideas")
         return validated_ideas
 
-    except json.JSONDecodeError as e:
+    except ValueError as e:
         logger.error(f"JSON parse error: {e}")
         return None
     except Exception as e:

@@ -1,0 +1,50 @@
+{
+  "agent": "repo_onboarding",
+  "id": "sdk-guide",
+  "input": "https://github.com/anthropics/anthropic-sdk-python",
+  "recorded_at": "2026-09-21T05:30:02+00:00",
+  "output": {
+    "project_name": "anthropic-sdk-python",
+    "overview": "The Claude SDK for Python provides access to the Claude API from Python applications.",
+    "tech_stack": [
+      "Python"
+    ],
+    "setup_steps": [
+      "Step 1: Install the SDK using pip with the command `pip install anthropic`.",
+      "Step 2: Ensure you have Python 3.10+ installed on your machine."
+    ],
+    "project_structure": {
+      ".devcontainer/": "Configuration files for development container.",
+      ".github/": "GitHub-specific files including workflows.",
+      ".gitignore": "Files and directories to be ignored by Git.",
+      ".python-version": "Specifies the Python version for the project.",
+      "CHANGELOG.md": "A log of changes made to the project.",
+      "CONTRIBUTING.md": "Guidelines for contributing to the project.",
+      "LICENSE": "The license under which the project is distributed.",
+      "README.md": "The main documentation file for the project.",
+      "api.md": "Documentation for the API provided by the SDK.",
+      "src/": "Source code for the SDK.",
+      "tests/": "Unit tests for the SDK."
+    },
+    "key_concepts": [
+      "Client-Server architecture for API interaction."
+    ],
+    "development_workflow": {
+      "branching_strategy": "Feature branches for new features and bug fixes.",
+      "testing": "Run tests located in the tests/ directory.",
+      "building": "",
+      "deploying": ""
+    },
+    "common_tasks": {
+      "run_tests": "Use the command `pytest` to run tests.",
+      "start_dev_server": "",
+      "build": "",
+      "lint": ""
+    },
+    "resources": [
+      "Full documentation at https://platform.claude.com/docs/en/api/sdks/python",
+      "Migration guide for upgrading from a 0.x release in MIGRATION.md"
+    ],
+    "repo_url": "https://github.com/anthropics/anthropic-sdk-python"
+  }
+}

@@ -1,0 +1,49 @@
+{
+  "agent": "cve_impact",
+  "id": "gin-go-mod",
+  "input": "https://github.com/gin-gonic/gin",
+  "recorded_at": "2026-09-21T05:30:14+00:00",
+  "output": {
+    "summary": "The repository has a dependency on an unmaintained package that is known to have security issues, which could pose risks to applications built using this framework.",
+    "risk_level": "Medium",
+    "cve_analysis": [
+      {
+        "cve_id": "GO-2026-5932",
+        "advisory_ids": [],
+        "package": "golang.org/x/crypto",
+        "ecosystem": "Go",
+        "version": "0.56.0",
+        "version_basis": "exact",
+        "severity": "Unknown",
+        "cvss_score": null,
+        "description": "The golang.org/x/crypto/openpgp package is unmaintained, unsafe by design, and has known security issues",
+        "fixed_in": [],
+        "url": "https://osv.dev/vulnerability/GO-2026-5932",
+        "source": "go.mod",
+        "impact": "The use of the golang.org/x/crypto/openpgp package, which is unsafe by design and unmaintained, could lead to vulnerabilities in cryptographic operations, potentially exposing sensitive data or allowing unauthorized access.",
+        "remediation": "OSV lists no fixed version; review the advisory for mitigations or alternatives."
+      }
+    ],
+    "common_themes": [
+      "Dependence on unmaintained libraries can lead to security vulnerabilities."
+    ],
+    "remediation_priority": [
+      {
+        "rank": 1,
+        "action": "Upgrade golang.org/x/crypto 0.56.0: 1 known vulnerabilities, worst is Unknown",
+        "fixes": [
+          "GO-2026-5932"
+        ]
+      }
+    ],
+    "recommendations": [
+      "Regularly review and update dependencies to ensure they are maintained and secure."
+    ],
+    "analysis_source": "osv+llm",
+    "dependencies_checked": 32,
+    "dependencies_unchecked": [],
+    "manifests_not_analyzed": [],
+    "data_source": "OSV.dev",
+    "repo_url": "https://github.com/gin-gonic/gin"
+  }
+}

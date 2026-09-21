@@ -1,0 +1,960 @@
+{
+  "agent": "cve_impact",
+  "id": "sdk-pyproject",
+  "input": "https://github.com/anthropics/anthropic-sdk-python",
+  "recorded_at": "2026-09-21T05:30:47+00:00",
+  "output": {
+    "summary": "The repository has several critical and high-severity vulnerabilities primarily associated with the 'aiohttp' package, which could lead to security bypasses, denial of service, and potential information leaks. Immediate attention is required to update affected dependencies to mitigate these risks.",
+    "risk_level": "Medium",
+    "cve_analysis": [
+      {
+        "cve_id": "CVE-2026-34520",
+        "advisory_ids": [
+          "GHSA-63hf-3vf5-4wqf",
+          "PYSEC-2026-2102"
+        ],
+        "package": "aiohttp",
+        "ecosystem": "PyPI",
+        "version": "3.10.0",
+        "version_basis": "range_floor",
+        "severity": "Critical",
+        "cvss_score": 9.1,
+        "description": "AIOHTTP's C parser (llhttp) accepts null bytes and control characters in response header values - header injection/security bypass",
+        "fixed_in": [
+          "3.13.4"
+        ],
+        "url": "https://osv.dev/vulnerability/GHSA-63hf-3vf5-4wqf",
+        "source": "pyproject.toml",
+        "impact": "This vulnerability allows for header injection, which could enable an attacker to manipulate HTTP responses, potentially leading to security bypasses in applications relying on 'aiohttp'.",
+        "remediation": "Upgrade aiohttp to a fixed version (fixed in: 3.13.4)."
+      },
+      {
+        "cve_id": "CVE-2026-63374",
+        "advisory_ids": [
+          "GHSA-82r6-8w77-94w6"
+        ],
+        "package": "anyio",
+        "ecosystem": "PyPI",
+        "version": "4.1.0",
+        "version_basis": "range_floor",
+        "severity": "Critical",
+        "cvss_score": null,
+        "description": "AnyIO: TLSStream IDNA 2003 host name encoding enables potential TLS certificate spoofing",
+        "fixed_in": [
+          "4.14.2"
+        ],
+        "url": "https://osv.dev/vulnerability/GHSA-82r6-8w77-94w6",
+        "source": "pyproject.toml",
+        "impact": "This issue could allow an attacker to spoof TLS certificates, undermining the security of communications in applications using 'anyio', which may lead to man-in-the-middle attacks.",
+        "remediation": "Upgrade anyio to a fixed version (fixed in: 4.14.2)."
+      },
+      {
+        "cve_id": "CVE-2025-69223",
+        "advisory_ids": [
+          "GHSA-6mq8-rvhq-8wgg",
+          "PYSEC-2026-1101"
+        ],
+        "package": "aiohttp",
+        "ecosystem": "PyPI",
+        "version": "3.10.0",
+        "version_basis": "range_floor",
+        "severity": "High",
+        "cvss_score": 7.5,
+        "description": "AIOHTTP's HTTP Parser auto_decompress feature is vulnerable to zip bomb",
+        "fixed_in": [
+          "3.13.3"
+        ],
+        "url": "https://osv.dev/vulnerability/GHSA-6mq8-rvhq-8wgg",
+        "source": "pyproject.toml",
+        "impact": "The vulnerability in the auto_decompress feature could allow an attacker to exploit the application with a zip bomb, leading to denial of service by exhausting system resources.",
+        "remediation": "Upgrade aiohttp to a fixed version (fixed in: 3.13.3)."
+      },
+      {
+        "cve_id": "CVE-2026-34516",
+        "advisory_ids": [
+          "GHSA-m5qp-6w8w-w647",
+          "PYSEC-2026-2098"
+        ],
+        "package": "aiohttp",
+        "ecosystem": "PyPI",
+        "version": "3.10.0",
+        "version_basis": "range_floor",
+        "severity": "High",
+        "cvss_score": 7.5,
+        "description": "AIOHTTP has a Multipart Header Size Bypass",
+        "fixed_in": [
+          "3.13.4"
+        ],
+        "url": "https://osv.dev/vulnerability/GHSA-m5qp-6w8w-w647",
+        "source": "pyproject.toml",
+        "impact": "This multipart header size bypass could allow attackers to manipulate requests in ways that could compromise application integrity or lead to unexpected behavior.",
+        "remediation": "Upgrade aiohttp to a fixed version (fixed in: 3.13.4)."
+      },
+      {
+        "cve_id": "CVE-2026-69244",
+        "advisory_ids": [
+          "GHSA-cq5v-8q36-5273",
+          "PYSEC-2026-3545"
+        ],
+        "package": "aiohttp",
+        "ecosystem": "PyPI",
+        "version": "3.10.0",
+        "version_basis": "range_floor",
+        "severity": "High",
+        "cvss_score": null,
+        "description": "AIOHTTP: Out-of-bounds heap read in C HTTP response parser error path (malformed chunked response)",
+        "fixed_in": [
+          "3.14.3"
+        ],
+        "url": "https://osv.dev/vulnerability/GHSA-cq5v-8q36-5273",
+        "source": "pyproject.toml",
+        "impact": "An out-of-bounds read could potentially lead to memory corruption, which might be exploited to execute arbitrary code or crash the application.",
+        "remediation": "Upgrade aiohttp to a fixed version (fixed in: 3.14.3)."
+      },
+      {
+        "cve_id": "CVE-2026-84382",
+        "advisory_ids": [
+          "GHSA-8xx6-hgc6-gc2m",
+          "PYSEC-2026-3846"
+        ],
+        "package": "httpx2",
+        "ecosystem": "PyPI",
+        "version": "2.0.0",
+        "version_basis": "range_floor",
+        "severity": "High",
+        "cvss_score": 7.5,
+        "description": "HTTPX2: Streaming response decompression does not bound peak memory (decompression amplification)",
+        "fixed_in": [
+          "2.12.0"
+        ],
+        "url": "https://osv.dev/vulnerability/GHSA-8xx6-hgc6-gc2m",
+        "source": "pyproject.toml",
+        "impact": "The decompression amplification vulnerability could lead to excessive memory usage, resulting in denial of service for applications that handle streaming responses.",
+        "remediation": "Upgrade httpx2 to a fixed version (fixed in: 2.12.0)."
+      },
+      {
+        "cve_id": "CVE-2024-42367",
+        "advisory_ids": [
+          "GHSA-jwhx-xcg6-8xhj",
+          "PYSEC-2026-1108"
+        ],
+        "package": "aiohttp",
+        "ecosystem": "PyPI",
+        "version": "3.10.0",
+        "version_basis": "range_floor",
+        "severity": "Medium",
+        "cvss_score": 4.8,
+        "description": "In aiohttp, compressed files as symlinks are not protected from path traversal",
+        "fixed_in": [
+          "3.10.2"
+        ],
+        "url": "https://osv.dev/vulnerability/GHSA-jwhx-xcg6-8xhj",
+        "source": "pyproject.toml",
+        "impact": "Path traversal vulnerabilities could allow unauthorized access to files on the server, potentially exposing sensitive data.",
+        "remediation": "Upgrade aiohttp to a fixed version (fixed in: 3.10.2)."
+      },
+      {
+        "cve_id": "CVE-2024-52304",
+        "advisory_ids": [
+          "GHSA-8495-4g3g-x7pr",
+          "PYSEC-2026-1103"
+        ],
+        "package": "aiohttp",
+        "ecosystem": "PyPI",
+        "version": "3.10.0",
+        "version_basis": "range_floor",
+        "severity": "Medium",
+        "cvss_score": null,
+        "description": "aiohttp allows request smuggling due to incorrect parsing of chunk extensions",
+        "fixed_in": [
+          "3.10.11"
+        ],
+        "url": "https://osv.dev/vulnerability/GHSA-8495-4g3g-x7pr",
+        "source": "pyproject.toml",
+        "impact": "Request smuggling due to incorrect parsing could allow attackers to bypass security controls, leading to unauthorized actions within the application.",
+        "remediation": "Upgrade aiohttp to a fixed version (fixed in: 3.10.11)."
+      },
+      {
+        "cve_id": "CVE-2025-69227",
+        "advisory_ids": [
+          "GHSA-jj3x-wxrx-4x23",
+          "PYSEC-2026-1107"
+        ],
+        "package": "aiohttp",
+        "ecosystem": "PyPI",
+        "version": "3.10.0",
+        "version_basis": "range_floor",
+        "severity": "Medium",
+        "cvss_score": null,
+        "description": "AIOHTTP vulnerable to DoS when bypassing asserts",
+        "fixed_in": [
+          "3.13.3"
+        ],
+        "url": "https://osv.dev/vulnerability/GHSA-jj3x-wxrx-4x23",
+        "source": "pyproject.toml",
+        "impact": "Denial of service vulnerabilities could allow attackers to exploit the application by bypassing assertions, leading to service interruptions.",
+        "remediation": "Upgrade aiohttp to a fixed version (fixed in: 3.13.3)."
+      },
+      {
+        "cve_id": "CVE-2025-69228",
+        "advisory_ids": [
+          "GHSA-6jhg-hg63-jvvf",
+          "PYSEC-2026-1100"
+        ],
+        "package": "aiohttp",
+        "ecosystem": "PyPI",
+        "version": "3.10.0",
+        "version_basis": "range_floor",
+        "severity": "Medium",
+        "cvss_score": null,
+        "description": "AIOHTTP vulnerable to  denial of service through large payloads",
+        "fixed_in": [
+          "3.13.3"
+        ],
+        "url": "https://osv.dev/vulnerability/GHSA-6jhg-hg63-jvvf",
+        "source": "pyproject.toml",
+        "impact": "Large payloads could be used to overwhelm the application, resulting in denial of service and degraded performance.",
+        "remediation": "Upgrade aiohttp to a fixed version (fixed in: 3.13.3)."
+      },
+      {
+        "cve_id": "CVE-2025-69229",
+        "advisory_ids": [
+          "GHSA-g84x-mcqj-x9qq",
+          "PYSEC-2026-1106"
+        ],
+        "package": "aiohttp",
+        "ecosystem": "PyPI",
+        "version": "3.10.0",
+        "version_basis": "range_floor",
+        "severity": "Medium",
+        "cvss_score": null,
+        "description": "AIOHTTP vulnerable to DoS through chunked messages",
+        "fixed_in": [
+          "3.13.3"
+        ],
+        "url": "https://osv.dev/vulnerability/GHSA-g84x-mcqj-x9qq",
+        "source": "pyproject.toml",
+        "impact": "Chunked message vulnerabilities could be exploited to cause denial of service, affecting the application's availability.",
+        "remediation": "Upgrade aiohttp to a fixed version (fixed in: 3.13.3)."
+      },
+      {
+        "cve_id": "CVE-2026-22815",
+        "advisory_ids": [
+          "GHSA-w2fm-2cpv-w7v5",
+          "PYSEC-2026-2094"
+        ],
+        "package": "aiohttp",
+        "ecosystem": "PyPI",
+        "version": "3.10.0",
+        "version_basis": "range_floor",
+        "severity": "Medium",
+        "cvss_score": null,
+        "description": "aiohttp allows unlimited trailer headers, leading to possible uncapped memory usage",
+        "fixed_in": [
+          "3.13.4"
+        ],
+        "url": "https://osv.dev/vulnerability/GHSA-w2fm-2cpv-w7v5",
+        "source": "pyproject.toml",
+        "impact": "Unlimited trailer headers could lead to unbounded memory usage, potentially crashing the application or causing it to become unresponsive.",
+        "remediation": "Upgrade aiohttp to a fixed version (fixed in: 3.13.4)."
+      },
+      {
+        "cve_id": "CVE-2026-34515",
+        "advisory_ids": [
+          "GHSA-p998-jp59-783m",
+          "PYSEC-2026-2097"
+        ],
+        "package": "aiohttp",
+        "ecosystem": "PyPI",
+        "version": "3.10.0",
+        "version_basis": "range_floor",
+        "severity": "Medium",
+        "cvss_score": null,
+        "description": "AIOHTTP affected by UNC SSRF/NTLMv2 Credential Theft/Local File Read in static resource handler on Windows",
+        "fixed_in": [
+          "3.13.4"
+        ],
+        "url": "https://osv.dev/vulnerability/GHSA-p998-jp59-783m",
+        "source": "pyproject.toml",
+        "impact": "This vulnerability could allow for SSRF attacks, leading to unauthorized access to internal resources or sensitive data.",
+        "remediation": "Upgrade aiohttp to a fixed version (fixed in: 3.13.4)."
+      },
+      {
+        "cve_id": "CVE-2026-34518",
+        "advisory_ids": [
+          "GHSA-966j-vmvw-g2g9",
+          "PYSEC-2026-2100"
+        ],
+        "package": "aiohttp",
+        "ecosystem": "PyPI",
+        "version": "3.10.0",
+        "version_basis": "range_floor",
+        "severity": "Medium",
+        "cvss_score": 5.3,
+        "description": "AIOHTTP leaks Cookie and Proxy-Authorization headers on cross-origin redirect",
+        "fixed_in": [
+          "3.13.4"
+        ],
+        "url": "https://osv.dev/vulnerability/GHSA-966j-vmvw-g2g9",
+        "source": "pyproject.toml",
+        "impact": "Leaking sensitive headers during cross-origin redirects could expose authentication tokens or sensitive information to attackers.",
+        "remediation": "Upgrade aiohttp to a fixed version (fixed in: 3.13.4)."
+      },
+      {
+        "cve_id": "CVE-2026-34525",
+        "advisory_ids": [
+          "GHSA-c427-h43c-vf67",
+          "PYSEC-2026-2103"
+        ],
+        "package": "aiohttp",
+        "ecosystem": "PyPI",
+        "version": "3.10.0",
+        "version_basis": "range_floor",
+        "severity": "Medium",
+        "cvss_score": null,
+        "description": "AIOHTTP accepts duplicate Host headers",
+        "fixed_in": [
+          "3.13.4"
+        ],
+        "url": "https://osv.dev/vulnerability/GHSA-c427-h43c-vf67",
+        "source": "pyproject.toml",
+        "impact": "Accepting duplicate Host headers could lead to confusion in request handling, potentially allowing for various attacks including cache poisoning.",
+        "remediation": "Upgrade aiohttp to a fixed version (fixed in: 3.13.4)."
+      },
+      {
+        "cve_id": "CVE-2026-34993",
+        "advisory_ids": [
+          "GHSA-jg22-mg44-37j8",
+          "PYSEC-2026-2104"
+        ],
+        "package": "aiohttp",
+        "ecosystem": "PyPI",
+        "version": "3.10.0",
+        "version_basis": "range_floor",
+        "severity": "Medium",
+        "cvss_score": 6.4,
+        "description": "AIOHTTP is Vulnerable to Deserialization of Untrusted Data",
+        "fixed_in": [
+          "3.14.0"
+        ],
+        "url": "https://osv.dev/vulnerability/GHSA-jg22-mg44-37j8",
+        "source": "pyproject.toml",
+        "impact": "",
+        "remediation": "Upgrade aiohttp to a fixed version (fixed in: 3.14.0)."
+      },
+      {
+        "cve_id": "CVE-2026-47265",
+        "advisory_ids": [
+          "GHSA-hg6j-4rv6-33pg",
+          "PYSEC-2026-2105"
+        ],
+        "package": "aiohttp",
+        "ecosystem": "PyPI",
+        "version": "3.10.0",
+        "version_basis": "range_floor",
+        "severity": "Medium",
+        "cvss_score": null,
+        "description": "AIOHTTP is vulnerable to cross-origin redirect with per-request cookies",
+        "fixed_in": [
+          "3.14.0"
+        ],
+        "url": "https://osv.dev/vulnerability/GHSA-hg6j-4rv6-33pg",
+        "source": "pyproject.toml",
+        "impact": "",
+        "remediation": "Upgrade aiohttp to a fixed version (fixed in: 3.14.0)."
+      },
+      {
+        "cve_id": "CVE-2026-54273",
+        "advisory_ids": [
+          "GHSA-4fvr-rgm6-gqmc",
+          "PYSEC-2026-2107"
+        ],
+        "package": "aiohttp",
+        "ecosystem": "PyPI",
+        "version": "3.10.0",
+        "version_basis": "range_floor",
+        "severity": "Medium",
+        "cvss_score": null,
+        "description": "aiohttp: HTTP/1 Pipelined Requests Queue Without Limit",
+        "fixed_in": [
+          "3.14.1"
+        ],
+        "url": "https://osv.dev/vulnerability/GHSA-4fvr-rgm6-gqmc",
+        "source": "pyproject.toml",
+        "impact": "",
+        "remediation": "Upgrade aiohttp to a fixed version (fixed in: 3.14.1)."
+      },
+      {
+        "cve_id": "CVE-2026-54274",
+        "advisory_ids": [
+          "GHSA-xcgm-r5h9-7989",
+          "PYSEC-2026-2108"
+        ],
+        "package": "aiohttp",
+        "ecosystem": "PyPI",
+        "version": "3.10.0",
+        "version_basis": "range_floor",
+        "severity": "Medium",
+        "cvss_score": null,
+        "description": "aiohttp: Incomplete websocket frame payloads bypass memory limits",
+        "fixed_in": [
+          "3.14.1"
+        ],
+        "url": "https://osv.dev/vulnerability/GHSA-xcgm-r5h9-7989",
+        "source": "pyproject.toml",
+        "impact": "",
+        "remediation": "Upgrade aiohttp to a fixed version (fixed in: 3.14.1)."
+      },
+      {
+        "cve_id": "CVE-2026-54276",
+        "advisory_ids": [
+          "GHSA-hpj7-wq8m-9hgp",
+          "PYSEC-2026-2109"
+        ],
+        "package": "aiohttp",
+        "ecosystem": "PyPI",
+        "version": "3.10.0",
+        "version_basis": "range_floor",
+        "severity": "Medium",
+        "cvss_score": null,
+        "description": "aiohttp: DigestAuthMiddleware Applies Credentials to Cross-Origin Redirect Challenges",
+        "fixed_in": [
+          "3.14.1"
+        ],
+        "url": "https://osv.dev/vulnerability/GHSA-hpj7-wq8m-9hgp",
+        "source": "pyproject.toml",
+        "impact": "",
+        "remediation": "Upgrade aiohttp to a fixed version (fixed in: 3.14.1)."
+      },
+      {
+        "cve_id": "CVE-2026-54277",
+        "advisory_ids": [
+          "GHSA-63hw-fmq6-xxg2",
+          "PYSEC-2026-2110"
+        ],
+        "package": "aiohttp",
+        "ecosystem": "PyPI",
+        "version": "3.10.0",
+        "version_basis": "range_floor",
+        "severity": "Medium",
+        "cvss_score": null,
+        "description": "aiohttp: C HTTP Parser Bypasses max_line_size for Fragmented Lines",
+        "fixed_in": [
+          "3.14.1"
+        ],
+        "url": "https://osv.dev/vulnerability/GHSA-63hw-fmq6-xxg2",
+        "source": "pyproject.toml",
+        "impact": "",
+        "remediation": "Upgrade aiohttp to a fixed version (fixed in: 3.14.1)."
+      },
+      {
+        "cve_id": "CVE-2026-54278",
+        "advisory_ids": [
+          "GHSA-g3cq-j2xw-wf74",
+          "PYSEC-2026-2111"
+        ],
+        "package": "aiohttp",
+        "ecosystem": "PyPI",
+        "version": "3.10.0",
+        "version_basis": "range_floor",
+        "severity": "Medium",
+        "cvss_score": null,
+        "description": "aiohttp: Unread Compressed Request Bodies Bypass client_max_size During Cleanup",
+        "fixed_in": [
+          "3.14.1"
+        ],
+        "url": "https://osv.dev/vulnerability/GHSA-g3cq-j2xw-wf74",
+        "source": "pyproject.toml",
+        "impact": "",
+        "remediation": "Upgrade aiohttp to a fixed version (fixed in: 3.14.1)."
+      },
+      {
+        "cve_id": "CVE-2026-59881",
+        "advisory_ids": [
+          "GHSA-mq44-7p77-q5h7",
+          "PYSEC-2026-3547"
+        ],
+        "package": "aiohttp",
+        "ecosystem": "PyPI",
+        "version": "3.10.0",
+        "version_basis": "range_floor",
+        "severity": "Medium",
+        "cvss_score": null,
+        "description": "AIOHTTP: WebSocket client accepts compressed frames without negotiated permessage-deflate",
+        "fixed_in": [
+          "3.14.2"
+        ],
+        "url": "https://osv.dev/vulnerability/GHSA-mq44-7p77-q5h7",
+        "source": "pyproject.toml",
+        "impact": "",
+        "remediation": "Upgrade aiohttp to a fixed version (fixed in: 3.14.2)."
+      },
+      {
+        "cve_id": "CVE-2026-69243",
+        "advisory_ids": [
+          "GHSA-mfx4-hv73-q22v",
+          "PYSEC-2026-3546"
+        ],
+        "package": "aiohttp",
+        "ecosystem": "PyPI",
+        "version": "3.10.0",
+        "version_basis": "range_floor",
+        "severity": "Medium",
+        "cvss_score": null,
+        "description": "AIOHTTP: HTTP request smuggling via WebSocket upgrade",
+        "fixed_in": [
+          "3.14.2"
+        ],
+        "url": "https://osv.dev/vulnerability/GHSA-mfx4-hv73-q22v",
+        "source": "pyproject.toml",
+        "impact": "",
+        "remediation": "Upgrade aiohttp to a fixed version (fixed in: 3.14.2)."
+      },
+      {
+        "cve_id": "CVE-2026-64847",
+        "advisory_ids": [
+          "GHSA-5p39-cfhj-2xmp"
+        ],
+        "package": "anyio",
+        "ecosystem": "PyPI",
+        "version": "4.1.0",
+        "version_basis": "range_floor",
+        "severity": "Medium",
+        "cvss_score": null,
+        "description": "AnyIO process-pool workers can block indefinitely on undrained stderr",
+        "fixed_in": [
+          "4.14.2"
+        ],
+        "url": "https://osv.dev/vulnerability/GHSA-5p39-cfhj-2xmp",
+        "source": "pyproject.toml",
+        "impact": "",
+        "remediation": "Upgrade anyio to a fixed version (fixed in: 4.14.2)."
+      },
+      {
+        "cve_id": "CVE-2026-84379",
+        "advisory_ids": [
+          "GHSA-h4x7-gw46-3wm6",
+          "PYSEC-2026-3848"
+        ],
+        "package": "httpx2",
+        "ecosystem": "PyPI",
+        "version": "2.0.0",
+        "version_basis": "range_floor",
+        "severity": "Medium",
+        "cvss_score": 5.3,
+        "description": "HTTPX2: Multipart part header injection via unvalidated file Content-Type and custom headers",
+        "fixed_in": [
+          "2.11.0"
+        ],
+        "url": "https://osv.dev/vulnerability/GHSA-h4x7-gw46-3wm6",
+        "source": "pyproject.toml",
+        "impact": "",
+        "remediation": "Upgrade httpx2 to a fixed version (fixed in: 2.11.0)."
+      },
+      {
+        "cve_id": "CVE-2026-84380",
+        "advisory_ids": [
+          "GHSA-pf96-p4fj-6566",
+          "PYSEC-2026-3849"
+        ],
+        "package": "httpx2",
+        "ecosystem": "PyPI",
+        "version": "2.0.0",
+        "version_basis": "range_floor",
+        "severity": "Medium",
+        "cvss_score": 5.6,
+        "description": "HTTPX2: Conflicting Content-Length and Transfer-Encoding headers can be auto-generated",
+        "fixed_in": [
+          "2.11.0"
+        ],
+        "url": "https://osv.dev/vulnerability/GHSA-pf96-p4fj-6566",
+        "source": "pyproject.toml",
+        "impact": "",
+        "remediation": "Upgrade httpx2 to a fixed version (fixed in: 2.11.0)."
+      },
+      {
+        "cve_id": "CVE-2024-3772",
+        "advisory_ids": [
+          "GHSA-mr82-8j83-vxmv",
+          "PYSEC-2026-1812"
+        ],
+        "package": "pydantic",
+        "ecosystem": "PyPI",
+        "version": "1.10.0",
+        "version_basis": "range_floor",
+        "severity": "Medium",
+        "cvss_score": 5.9,
+        "description": "Pydantic regular expression denial of service",
+        "fixed_in": [
+          "2.4.0",
+          "1.10.13"
+        ],
+        "url": "https://osv.dev/vulnerability/GHSA-mr82-8j83-vxmv",
+        "source": "pyproject.toml",
+        "impact": "",
+        "remediation": "Upgrade pydantic to a fixed version (fixed in: 2.4.0, 1.10.13)."
+      },
+      {
+        "cve_id": "CVE-2025-53643",
+        "advisory_ids": [
+          "GHSA-9548-qrrj-x5pj",
+          "PYSEC-2026-1104"
+        ],
+        "package": "aiohttp",
+        "ecosystem": "PyPI",
+        "version": "3.10.0",
+        "version_basis": "range_floor",
+        "severity": "Low",
+        "cvss_score": null,
+        "description": " AIOHTTP is vulnerable to HTTP Request/Response Smuggling through incorrect parsing of chunked trailer sections",
+        "fixed_in": [
+          "3.12.14"
+        ],
+        "url": "https://osv.dev/vulnerability/GHSA-9548-qrrj-x5pj",
+        "source": "pyproject.toml",
+        "impact": "",
+        "remediation": "Upgrade aiohttp to a fixed version (fixed in: 3.12.14)."
+      },
+      {
+        "cve_id": "CVE-2025-69224",
+        "advisory_ids": [
+          "GHSA-69f9-5gxw-wvc2",
+          "PYSEC-2026-1099"
+        ],
+        "package": "aiohttp",
+        "ecosystem": "PyPI",
+        "version": "3.10.0",
+        "version_basis": "range_floor",
+        "severity": "Low",
+        "cvss_score": null,
+        "description": "AIOHTTP's unicode processing of header values could cause parsing discrepancies",
+        "fixed_in": [
+          "3.13.3"
+        ],
+        "url": "https://osv.dev/vulnerability/GHSA-69f9-5gxw-wvc2",
+        "source": "pyproject.toml",
+        "impact": "",
+        "remediation": "Upgrade aiohttp to a fixed version (fixed in: 3.13.3)."
+      },
+      {
+        "cve_id": "CVE-2025-69225",
+        "advisory_ids": [
+          "GHSA-mqqc-3gqh-h2x8",
+          "PYSEC-2026-1109"
+        ],
+        "package": "aiohttp",
+        "ecosystem": "PyPI",
+        "version": "3.10.0",
+        "version_basis": "range_floor",
+        "severity": "Low",
+        "cvss_score": null,
+        "description": "AIOHTTP has unicode match groups in regexes for ASCII protocol elements",
+        "fixed_in": [
+          "3.13.3"
+        ],
+        "url": "https://osv.dev/vulnerability/GHSA-mqqc-3gqh-h2x8",
+        "source": "pyproject.toml",
+        "impact": "",
+        "remediation": "Upgrade aiohttp to a fixed version (fixed in: 3.13.3)."
+      },
+      {
+        "cve_id": "CVE-2025-69226",
+        "advisory_ids": [
+          "GHSA-54jq-c3m8-4m76",
+          "PYSEC-2026-1097"
+        ],
+        "package": "aiohttp",
+        "ecosystem": "PyPI",
+        "version": "3.10.0",
+        "version_basis": "range_floor",
+        "severity": "Low",
+        "cvss_score": null,
+        "description": "AIOHTTP vulnerable to brute-force leak of internal static ﬁle path components",
+        "fixed_in": [
+          "3.13.3"
+        ],
+        "url": "https://osv.dev/vulnerability/GHSA-54jq-c3m8-4m76",
+        "source": "pyproject.toml",
+        "impact": "",
+        "remediation": "Upgrade aiohttp to a fixed version (fixed in: 3.13.3)."
+      },
+      {
+        "cve_id": "CVE-2025-69230",
+        "advisory_ids": [
+          "GHSA-fh55-r93g-j68g",
+          "PYSEC-2026-1105"
+        ],
+        "package": "aiohttp",
+        "ecosystem": "PyPI",
+        "version": "3.10.0",
+        "version_basis": "range_floor",
+        "severity": "Low",
+        "cvss_score": null,
+        "description": "AIOHTTP Vulnerable to Cookie Parser Warning Storm",
+        "fixed_in": [
+          "3.13.3"
+        ],
+        "url": "https://osv.dev/vulnerability/GHSA-fh55-r93g-j68g",
+        "source": "pyproject.toml",
+        "impact": "",
+        "remediation": "Upgrade aiohttp to a fixed version (fixed in: 3.13.3)."
+      },
+      {
+        "cve_id": "CVE-2026-34513",
+        "advisory_ids": [
+          "GHSA-hcc4-c3v8-rx92",
+          "PYSEC-2026-2095"
+        ],
+        "package": "aiohttp",
+        "ecosystem": "PyPI",
+        "version": "3.10.0",
+        "version_basis": "range_floor",
+        "severity": "Low",
+        "cvss_score": null,
+        "description": "AIOHTTP Affected by Denial of Service (DoS) via Unbounded DNS Cache in TCPConnector",
+        "fixed_in": [
+          "3.13.4"
+        ],
+        "url": "https://osv.dev/vulnerability/GHSA-hcc4-c3v8-rx92",
+        "source": "pyproject.toml",
+        "impact": "",
+        "remediation": "Upgrade aiohttp to a fixed version (fixed in: 3.13.4)."
+      },
+      {
+        "cve_id": "CVE-2026-34514",
+        "advisory_ids": [
+          "GHSA-2vrm-gr82-f7m5",
+          "PYSEC-2026-2096"
+        ],
+        "package": "aiohttp",
+        "ecosystem": "PyPI",
+        "version": "3.10.0",
+        "version_basis": "range_floor",
+        "severity": "Low",
+        "cvss_score": null,
+        "description": "AIOHTTP has CRLF injection through multipart part content type header construction",
+        "fixed_in": [
+          "3.13.4"
+        ],
+        "url": "https://osv.dev/vulnerability/GHSA-2vrm-gr82-f7m5",
+        "source": "pyproject.toml",
+        "impact": "",
+        "remediation": "Upgrade aiohttp to a fixed version (fixed in: 3.13.4)."
+      },
+      {
+        "cve_id": "CVE-2026-34517",
+        "advisory_ids": [
+          "GHSA-3wq7-rqq7-wx6j",
+          "PYSEC-2026-2099"
+        ],
+        "package": "aiohttp",
+        "ecosystem": "PyPI",
+        "version": "3.10.0",
+        "version_basis": "range_floor",
+        "severity": "Low",
+        "cvss_score": null,
+        "description": "AIOHTTP has late size enforcement for non-file multipart fields causes memory DoS",
+        "fixed_in": [
+          "3.13.4"
+        ],
+        "url": "https://osv.dev/vulnerability/GHSA-3wq7-rqq7-wx6j",
+        "source": "pyproject.toml",
+        "impact": "",
+        "remediation": "Upgrade aiohttp to a fixed version (fixed in: 3.13.4)."
+      },
+      {
+        "cve_id": "CVE-2026-34519",
+        "advisory_ids": [
+          "GHSA-mwh4-6h8g-pg8w",
+          "PYSEC-2026-2101"
+        ],
+        "package": "aiohttp",
+        "ecosystem": "PyPI",
+        "version": "3.10.0",
+        "version_basis": "range_floor",
+        "severity": "Low",
+        "cvss_score": null,
+        "description": "AIOHTTP has HTTP response splitting via \\r in reason phrase",
+        "fixed_in": [
+          "3.13.4"
+        ],
+        "url": "https://osv.dev/vulnerability/GHSA-mwh4-6h8g-pg8w",
+        "source": "pyproject.toml",
+        "impact": "",
+        "remediation": "Upgrade aiohttp to a fixed version (fixed in: 3.13.4)."
+      },
+      {
+        "cve_id": "CVE-2026-50269",
+        "advisory_ids": [
+          "GHSA-m6qw-4cw2-hm4m",
+          "PYSEC-2026-2106"
+        ],
+        "package": "aiohttp",
+        "ecosystem": "PyPI",
+        "version": "3.10.0",
+        "version_basis": "range_floor",
+        "severity": "Low",
+        "cvss_score": null,
+        "description": "aiohttp: CRLF injection in multipart headers",
+        "fixed_in": [
+          "3.14.0"
+        ],
+        "url": "https://osv.dev/vulnerability/GHSA-m6qw-4cw2-hm4m",
+        "source": "pyproject.toml",
+        "impact": "",
+        "remediation": "Upgrade aiohttp to a fixed version (fixed in: 3.14.0)."
+      },
+      {
+        "cve_id": "CVE-2026-54275",
+        "advisory_ids": [
+          "GHSA-4m7w-qmgq-4wj5",
+          "PYSEC-2026-237"
+        ],
+        "package": "aiohttp",
+        "ecosystem": "PyPI",
+        "version": "3.10.0",
+        "version_basis": "range_floor",
+        "severity": "Low",
+        "cvss_score": null,
+        "description": "aiohttp: TLS Server Hostname Override Is Ignored When Reusing HTTPS Connections",
+        "fixed_in": [
+          "3.14.1"
+        ],
+        "url": "https://osv.dev/vulnerability/GHSA-4m7w-qmgq-4wj5",
+        "source": "pyproject.toml",
+        "impact": "",
+        "remediation": "Upgrade aiohttp to a fixed version (fixed in: 3.14.1)."
+      },
+      {
+        "cve_id": "CVE-2026-54279",
+        "advisory_ids": [
+          "GHSA-2fqr-mr3j-6wp8",
+          "PYSEC-2026-2112"
+        ],
+        "package": "aiohttp",
+        "ecosystem": "PyPI",
+        "version": "3.10.0",
+        "version_basis": "range_floor",
+        "severity": "Low",
+        "cvss_score": null,
+        "description": "aiohttp: Host-Only Cookies Become Domain Cookies After CookieJar Persistence",
+        "fixed_in": [
+          "3.14.1"
+        ],
+        "url": "https://osv.dev/vulnerability/GHSA-2fqr-mr3j-6wp8",
+        "source": "pyproject.toml",
+        "impact": "",
+        "remediation": "Upgrade aiohttp to a fixed version (fixed in: 3.14.1)."
+      },
+      {
+        "cve_id": "CVE-2026-54280",
+        "advisory_ids": [
+          "GHSA-9x8q-7h8h-wcw9",
+          "PYSEC-2026-2113"
+        ],
+        "package": "aiohttp",
+        "ecosystem": "PyPI",
+        "version": "3.10.0",
+        "version_basis": "range_floor",
+        "severity": "Low",
+        "cvss_score": null,
+        "description": "aiohttp: Payload Response Resources Are Not Closed After Mid-Body Disconnect",
+        "fixed_in": [
+          "3.14.1"
+        ],
+        "url": "https://osv.dev/vulnerability/GHSA-9x8q-7h8h-wcw9",
+        "source": "pyproject.toml",
+        "impact": "",
+        "remediation": "Upgrade aiohttp to a fixed version (fixed in: 3.14.1)."
+      }
+    ],
+    "common_themes": [
+      "Multiple vulnerabilities in 'aiohttp' related to header handling, memory management, and denial of service"
+    ],
+    "remediation_priority": [
+      {
+        "rank": 1,
+        "action": "Upgrade aiohttp 3.10.0: 35 known vulnerabilities, worst is Critical",
+        "fixes": [
+          "CVE-2026-34520",
+          "CVE-2025-69223",
+          "CVE-2026-34516",
+          "CVE-2026-69244",
+          "CVE-2024-42367",
+          "CVE-2024-52304",
+          "CVE-2025-69227",
+          "CVE-2025-69228",
+          "CVE-2025-69229",
+          "CVE-2026-22815",
+          "CVE-2026-34515",
+          "CVE-2026-34518",
+          "CVE-2026-34525",
+          "CVE-2026-34993",
+          "CVE-2026-47265",
+          "CVE-2026-54273",
+          "CVE-2026-54274",
+          "CVE-2026-54276",
+          "CVE-2026-54277",
+          "CVE-2026-54278",
+          "CVE-2026-59881",
+          "CVE-2026-69243",
+          "CVE-2025-53643",
+          "CVE-2025-69224",
+          "CVE-2025-69225",
+          "CVE-2025-69226",
+          "CVE-2025-69230",
+          "CVE-2026-34513",
+          "CVE-2026-34514",
+          "CVE-2026-34517",
+          "CVE-2026-34519",
+          "CVE-2026-50269",
+          "CVE-2026-54275",
+          "CVE-2026-54279",
+          "CVE-2026-54280"
+        ]
+      },
+      {
+        "rank": 2,
+        "action": "Upgrade anyio 4.1.0: 2 known vulnerabilities, worst is Critical",
+        "fixes": [
+          "CVE-2026-63374",
+          "CVE-2026-64847"
+        ]
+      },
+      {
+        "rank": 3,
+        "action": "Upgrade httpx2 2.0.0: 3 known vulnerabilities, worst is High",
+        "fixes": [
+          "CVE-2026-84382",
+          "CVE-2026-84379",
+          "CVE-2026-84380"
+        ]
+      },
+      {
+        "rank": 4,
+        "action": "Upgrade pydantic 1.10.0: 1 known vulnerabilities, worst is Medium",
+        "fixes": [
+          "CVE-2024-3772"
+        ]
+      }
+    ],
+    "recommendations": [
+      "Regularly update dependencies to their latest versions to mitigate known vulnerabilities.",
+      "Implement security best practices such as input validation and output encoding to reduce the risk of injection attacks.",
+      "Conduct regular security audits and vulnerability assessments to identify and address potential risks."
+    ],
+    "analysis_source": "osv+llm",
+    "dependencies_checked": 12,
+    "dependencies_unchecked": [
+      {
+        "name": "standardwebhooks",
+        "source": "pyproject.toml",
+        "reason": "no resolvable version"
+      }
+    ],
+    "manifests_not_analyzed": [],
+    "data_source": "OSV.dev",
+    "repo_url": "https://github.com/anthropics/anthropic-sdk-python",
+    "advisories_not_detailed": 30
+  }
+}

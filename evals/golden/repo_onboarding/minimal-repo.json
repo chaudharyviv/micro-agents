@@ -1,0 +1,30 @@
+{
+  "agent": "repo_onboarding",
+  "id": "minimal-repo",
+  "input": "https://github.com/octocat/Hello-World",
+  "recorded_at": "2026-09-21T05:30:06+00:00",
+  "output": {
+    "project_name": "Hello-World",
+    "overview": "This project is a simple demonstration repository on GitHub.",
+    "tech_stack": [],
+    "setup_steps": [],
+    "project_structure": {
+      "README": "Contains the introductory content for the repository."
+    },
+    "key_concepts": [],
+    "development_workflow": {
+      "branching_strategy": "",
+      "testing": "",
+      "building": "",
+      "deploying": ""
+    },
+    "common_tasks": {
+      "run_tests": "",
+      "start_dev_server": "",
+      "build": "",
+      "lint": ""
+    },
+    "resources": [],
+    "repo_url": "https://github.com/octocat/Hello-World"
+  }
+}

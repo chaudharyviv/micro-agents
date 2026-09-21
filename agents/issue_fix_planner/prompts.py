@@ -26,15 +26,10 @@ USER_PROMPT_TEMPLATE = """Please analyze this GitHub issue and create an impleme
 Issue URL: {issue_url}
 
 Issue Details:
-<untrusted_data>
-Title: {issue_title}
-Body: {issue_body}
-</untrusted_data>
+{issue_details}
 
 Related Repository Data:
-<untrusted_data>
 {repo_data}
-</untrusted_data>
 
 Generate a concise implementation plan (200-400 words) with:
 1. **Understanding** - What is this issue about?
@@ -45,20 +40,3 @@ Generate a concise implementation plan (200-400 words) with:
 
 IMPORTANT: Do NOT write any code, code examples, or suggest creating PRs.
 Focus only on the planning aspects."""
-
-SEARCH_PROMPT = """Based on this GitHub issue, what are the key files and directories I should look at?
-<untrusted_data>
-Issue: {issue_title}
-Body: {issue_body}
-</untrusted_data>
-
-Provide 3-5 specific file paths or directory names to investigate."""
-
-FILE_ANALYSIS_PROMPT = """Analyze what changes might be needed based on this issue and search results.
-<untrusted_data>
-Issue: {issue_title}
-Description: {issue_body}
-Search Results: {search_results}
-</untrusted_data>
-
-List specific files that likely need modification and why."""

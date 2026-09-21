@@ -1,0 +1,26 @@
+{
+  "agent": "blog_scout",
+  "id": "gibberish-topic-explained",
+  "input": "qzxv wlkjh nonexistent topic 8675309",
+  "recorded_at": "2026-09-21T05:29:45+00:00",
+  "output": [
+    {
+      "title": "The Legacy of 867-5309: How a Song Changed Phone Culture Forever",
+      "pitch": "Explore the cultural impact of Tommy Tutone's hit song '867-5309/Jenny' and its influence on prank calling and pop culture.",
+      "source_url": "https://en.wikipedia.org/wiki/867-5309/Jenny",
+      "source_title": "867-5309/Jenny - Wikipedia"
+    },
+    {
+      "title": "From Lyrics to Life: The Real Story Behind 867-5309/Jenny",
+      "pitch": "Delve into the contrasting stories of the songwriters behind '867-5309/Jenny' and how their personal experiences shaped this iconic track.",
+      "source_url": "https://genius.com/Tommy-tutone-867-5309-jenny-lyrics",
+      "source_title": "Tommy Tutone – 867-5309/Jenny Lyrics | Genius Lyrics"
+    },
+    {
+      "title": "The Prank Call Phenomenon: A Look at 867-5309 and Its Impact on Communication",
+      "pitch": "Investigate how the song '867-5309/Jenny' sparked a wave of prank calls and what it reveals about communication trends in the 1980s.",
+      "source_url": "https://en.wikipedia.org/wiki/867-5309/Jenny",
+      "source_title": "867-5309/Jenny - Wikipedia"
+    }
+  ]
+}

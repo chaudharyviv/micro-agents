@@ -1,0 +1,20 @@
+{
+  "agent": "cve_impact",
+  "id": "no-manifest-is-unknown",
+  "input": "https://github.com/octocat/Hello-World",
+  "recorded_at": "2026-09-21T05:30:59+00:00",
+  "output": {
+    "summary": "No dependencies could be checked: no dependency manifests found in the repository root. This is not evidence the project is free of vulnerabilities.",
+    "risk_level": "Unknown",
+    "cve_analysis": [],
+    "common_themes": [],
+    "remediation_priority": [],
+    "recommendations": [],
+    "analysis_source": "osv",
+    "dependencies_checked": 0,
+    "dependencies_unchecked": [],
+    "manifests_not_analyzed": [],
+    "data_source": "OSV.dev",
+    "repo_url": "https://github.com/octocat/Hello-World"
+  }
+}

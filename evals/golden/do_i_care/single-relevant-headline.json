@@ -1,0 +1,34 @@
+{
+  "agent": "do_i_care",
+  "id": "single-relevant-headline",
+  "input": [
+    "Profile: platform engineer at a fintech, moving workloads from VMs to Kubernetes",
+    "Kubernetes 1.34 deprecates several networking APIs"
+  ],
+  "recorded_at": "2026-09-21T05:31:54+00:00",
+  "output": {
+    "status": "success",
+    "top_items": [
+      {
+        "rank": 1,
+        "headline": "Kubernetes 1.34 deprecates several networking APIs",
+        "score": 8,
+        "score_reason": "The deprecation of networking APIs in Kubernetes is relevant to a platform engineer working with Kubernetes, as it may impact workload migration and require updates to existing configurations.",
+        "why_it_matters": "The deprecation of networking APIs in Kubernetes 1.34 is crucial for a platform engineer, especially in a fintech environment where reliable networking is essential for application performance and security. Understanding these changes will help in planning for migration and ensuring that workloads are transitioned smoothly without relying on deprecated features.",
+        "suggested_action": "Review the Kubernetes 1.34 release notes to identify the deprecated APIs and assess the impact on current workloads."
+      }
+    ],
+    "scores": [
+      {
+        "headline": "Kubernetes 1.34 deprecates several networking APIs",
+        "score": 8
+      }
+    ],
+    "original_count": 1,
+    "analyzed_count": 1,
+    "skipped_count": 0,
+    "profile_used": "custom",
+    "profile": "platform engineer at a fintech, moving workloads from VMs to Kubernetes",
+    "analysis_available": true
+  }
+}

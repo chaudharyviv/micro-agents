@@ -1,394 +1,183 @@
-# Evaluation Guide: Achieving 80%+ Pass Rates
+# Evaluation Guide
 
-This guide explains what the pass rates mean, how to run evaluations, and how to improve agents to meet the 80%+ target.
+How the agents are evaluated, how to run the suite, how to add a case, and how to read a failure.
 
----
+The evals answer one question: **does each agent do what it claims, on real inputs, in a way we can check?**
+They are only useful if they can fail, so every check asserts on content (is the answer grounded, ranked,
+routed, consistent?) rather than on the mere presence of an answer, and the checks themselves are tested.
 
-## What Are Pass Rates?
-
-**Pass rates** measure how well each agent performs on its test cases. Each agent has 3-5 predefined test cases in `evals.jsonl` that verify:
-
-✅ **Core functionality** — Does the agent produce output in the right format?
-✅ **Correctness** — Are results accurate and useful?
-✅ **Error handling** — Does the agent fail gracefully on bad input?
-✅ **Guardrails** — For planning agents: no code generation, no hallucination
-
-**Example test case:**
-```jsonl
-{"input": "machine learning", "expected_behavior": "Should return 3-5 blog ideas with valid https:// URLs", "check": "has_source_url"}
-```
+For current pass rates, run the suite or read the latest CI run. Numbers are deliberately not copied into
+docs, because they go stale; `evals/baseline.json` records the last accepted live run.
 
 ---
 
-## Current State
-
-The pass rates in README.md are **currently placeholder estimates**. To get real, actionable pass rates:
+## Running the evals
 
 ```bash
-python evals/run_evals.py
+python evals/run_evals.py --replay        # offline, free, no keys: what CI runs on every change
+python evals/run_evals.py                 # live: real OpenAI, Tavily, GitHub and OSV.dev calls
+python evals/run_evals.py --agent do_i_care --only ranks   # a subset
+python evals/run_evals.py --list          # show every case
+python evals/run_evals.py -v              # also list passing cases and notes
 ```
 
-This runs all agent tests and generates a table like:
+A live run needs `OPENAI_API_KEY` and `TAVILY_API_KEY` (and `GITHUB_TOKEN` is strongly recommended, since GitHub's
+unauthenticated limit of 60 requests an hour is not enough). It makes roughly 40 model calls, and the runner caps
+a run with `--max-model-calls` (default 250) using the same budget gate as the app.
 
-```
-Agent                     Pass Rate       Tests      Status
-────────────────────────────────────────────────────────────
-blog_scout                80% (4/5)       ✅ PASS
-repo_onboarding           60% (3/5)       ⚠️  REVIEW
-cve_impact                40% (2/5)       ⚠️  REVIEW
-issue_fix_planner         60% (3/5)       ⚠️  REVIEW
-do_i_care                 60% (3/5)       ⚠️  REVIEW
-opportunity_scout         40% (2/5)       ⚠️  REVIEW
-────────────────────────────────────────────────────────────
-OVERALL                   55%
-```
+### The two modes
+
+| | `--replay` (offline) | live |
+|---|---|---|
+| Needs | nothing | API keys, network |
+| Costs | nothing | a few cents |
+| Cases marked `"offline": true` (validation and error paths) | run the **real agent code**, with all network access blocked | run the real agent code |
+| Other cases | the checks run against the output **recorded** in `evals/golden/` | run the real agent |
+| Catches | invalid case files; a check that no longer matches the shape agents return; a case with no recording; validation and error-path regressions | everything above, plus real model behavior and live data |
+
+Replay is what runs on every pull request. It cannot see a change to an agent's *behavior* on networked cases,
+because it replays recorded output; the scheduled live run does (see CI below).
+
+### Exit codes
+
+| Code | Meaning |
+|---|---|
+| 0 | Every agent met the pass-rate bar and nothing regressed against the baseline |
+| 1 | **Quality failure**: an agent is below `--min-pass-rate` (default 0.8 live, 1.0 replay), or a case that passed in the baseline now fails |
+| 2 | **Infrastructure**: rate limits, outages or the budget cap stopped cases from running, and no quality failure was seen |
+| 3 | The suite could not run: invalid case files, a live run without keys, or bad arguments |
+
+Infrastructure errors are reported separately and are **not counted against an agent's pass rate**, so a GitHub
+outage cannot turn an agent red, and cannot turn it green either: the run exits 2.
 
 ---
 
-## How to Improve Pass Rates
+## Anatomy of a case
 
-### 1. Identify Failures
+Cases live in `agents/<agent>/evals.jsonl`, one JSON object per line:
 
-Run evaluations with verbose output:
-
-```bash
-python evals/run_evals.py --verbose
+```json
+{"id": "ranks-relevant-first",
+ "description": "Three infrastructure headlines and three irrelevant ones: the top items are the relevant ones.",
+ "input": ["Profile: platform engineer moving to Kubernetes", "Kubernetes 1.34 deprecates ...", "Local bakery wins ..."],
+ "checks": [{"type": "success"},
+            {"type": "ranking", "relevant": ["Kubernetes 1.34 deprecates ..."], "min_hits": 1, "max_offtopic": 0},
+            {"type": "analysis_complete"}],
+ "attempts": 2}
 ```
 
-This shows which tests failed:
+| Field | |
+|---|---|
+| `id` | Unique within the agent: lower-case letters, digits, hyphens. Used for recordings and the baseline |
+| `description` | What the case protects against, in a sentence. Required |
+| `input` | What the agent is called with: a string; a list of strings for `do_i_care`; `null` allowed for `blog_scout` |
+| `checks` | A non-empty list. **Every** check must pass |
+| `offline` | Optional. `true` for validation and error paths that need no network (they run for real in replay mode) |
+| `attempts` | Optional. Run up to this many times; the case passes if any attempt does. Passing only on a retry is reported as *flaky*. Use it for probabilistic model behavior, not to hide a bug |
+
+Case files are validated when loaded: an unknown check name, a misspelled parameter, an old-format line, a
+duplicate id or a wrong input type stops the run with exit code 3 and lists every problem. Nothing that is
+misspelled can silently pass.
+
+## The checks
+
+Defined in `evals/checks.py`. A few of them:
+
+| Check | Asserts |
+|---|---|
+| `success` / `error` | The agent returned a result, or an error whose message mentions one of the given phrases |
+| `nonempty`, `count`, `each`, `unique`, `equals`, `one_of`, `at_least` | Structure and values at a dotted path |
+| `contains_any` | The output at a path mentions something specific (for example `tech_stack` includes `go`) |
+| `no_placeholder` | None of the "see full analysis" style filler text |
+| `no_code`, `word_count`, `has_sections` | An issue plan is a plan: right length, all sections, no code, no PR suggestion |
+| `urls_subset` | Every cited URL is one the agent was actually given (grounding) |
+| `ranking`, `excludes`, `none_relevant`, `analysis_complete` | Do I Care ranks the relevant items first, keeps injected ones out, filters, and explains |
+| `risk_consistent` | The CVE risk level is exactly what the findings imply, judged against a rule the check states itself |
+| `osv_ids_exist` | Every CVE/advisory ID really is an OSV record for that package (network; skipped in replay) |
+| `routes`, `report_mentions`, `links_safe` | The orchestrator used the right specialists on exactly the target named, and its report has no images or unsourced links |
+
+**The checks are tested too.** `tests/test_eval_checks.py` gives every check a known-good and a known-bad
+fixture and fails if a check has none. Two rules learned the hard way:
+
+- A check must be able to fail. The old suite had a `manual` check that passed anything, and an unknown rule name
+  that passed by default. Neither exists any more.
+- A check must not ask the code under test for the right answer. `risk_consistent` states the risk rule itself;
+  had it imported the agent's own function it would have agreed with a broken one.
+
+## Adding a case
+
+1. Add a line to `agents/<agent>/evals.jsonl`. Prefer stable, real targets (a well-known repository, an old
+   issue) over ones that might change or disappear.
+2. Write checks that would fail if the agent were *wrong*, not just absent. Ask: what defect should turn this red?
+3. Validate and run just that case:
+   ```bash
+   python evals/run_evals.py --list --agent cve_impact
+   python evals/run_evals.py --agent cve_impact --only my-new-case --record
+   ```
+   `--record` saves the passing output to `evals/golden/<agent>/<id>.json` so replay (and CI) can check it.
+4. Commit the case and its recording. `tests/test_eval_cases.py` fails if a networked case has no recording, if a
+   recording has no case, or if a case's input changed after it was recorded.
+
+If you add a new check, add it to `FIXTURES` in `tests/test_eval_checks.py` with good and bad outputs.
+
+## Recordings and the baseline
+
+- **Recordings** (`evals/golden/`) are real agent outputs from passing live runs. Replay re-runs the *checks*
+  against them, so if an agent's output shape changes, or a check is edited, replay fails until the recording is
+  refreshed: `python evals/run_evals.py --record`. Review the diff, because a recording is only as good as the run
+  it came from.
+- **The baseline** (`evals/baseline.json`) is each case's pass/fail from the last accepted live run. A live run
+  exits 1 if a case that passed there now fails, even when the agent is still above the pass-rate bar. Update it
+  deliberately after an accepted run: `python evals/run_evals.py --update-baseline` (refused if any case hit
+  infrastructure errors).
+
+## When something fails
+
+Read the failing line first; each failure names the check and says why:
+
 ```
-📊 Testing repo_onboarding...
-    ✅ Test 1/5
-    ✅ Test 2/5
-    ❌ Test 3/5  ← Failed test
-    ✅ Test 4/5
-    ❌ Test 5/5  ← Failed test
-   ⚠️ Pass rate: 3/5 (60%)
-   Failures:
-     - Test 3: https://github.com/anthropics/anthropic-sdk-python
-     - Test 5: https://github.com/gradio-app/gradio
-```
-
-### 2. Understand the Test Case
-
-Open `agents/{agent}/evals.jsonl` and examine the failing test:
-
-```jsonl
-{"input": "https://github.com/gradio-app/gradio", "expected_behavior": "Should generate comprehensive onboarding guide (200-500 words) with setup instructions and project structure", "check": "guide_completeness"}
-```
-
-**Keys:**
-- `input` — What to pass to the agent
-- `expected_behavior` — What should happen
-- `check` — Validation rule
-
-### 3. Run the Agent Manually
-
-Test the agent directly:
-
-```python
-from agents.repo_onboarding.logic import generate_onboarding_guide
-
-result = generate_onboarding_guide("https://github.com/gradio-app/gradio")
-print(result)
-```
-
-**Check:**
-- Does the output have the expected fields? (e.g., `project_name`, `overview`, `setup_steps`)
-- Is the output correct? (e.g., are setup steps actually for Gradio?)
-- Does it match the expected behavior?
-
-### 4. Debug the Issue
-
-Common reasons agents fail:
-
-| Issue | Solution |
-|-------|----------|
-| **API rate limit** | Wait 1 min, add `GITHUB_TOKEN` for higher limits |
-| **API timeout** | Increase timeout in `core/llm.py`, use fallback API |
-| **LLM hallucination** | Improve system prompt to be more explicit |
-| **Parse error** | Agent output is invalid format (not JSON, missing fields) |
-| **Missing dependency** | Run `pip install -r requirements.txt` |
-| **Network error** | Check internet connection, test `curl` to APIs |
-
-### 5. Fix the Agent
-
-Edit the agent's logic:
-
-**Example: repo_onboarding failing on parse**
-
-```python
-# agents/repo_onboarding/logic.py
-
-def _parse_guide(response: str, repo_url: str) -> Optional[dict]:
-    """Parse JSON response from LLM."""
-    try:
-        # ... existing code ...
-        
-        # Add this check if missing
-        if "overview" not in guide:
-            logger.warning("Guide missing 'overview' field")
-            # Fallback: add default
-            guide["overview"] = f"Project at {repo_url}"
-        
-        return guide
-    except json.JSONDecodeError:
-        # ... improve error message ...
+FAIL  do_i_care/nothing-relevant  (1.9s)
+      - none_relevant: expected no top items and an explanation, got 3 items, message=None
 ```
 
-### 6. Rerun Evals
+Then decide which of these it is:
 
-After fixing:
+1. **The agent is wrong.** Fix the agent. Run the case again with `--only`.
+2. **The model was unlucky.** Probabilistic cases have `attempts: 2` for this. If a case is flaky in the run summary
+   *often*, it is telling you the behavior is not reliable: strengthen the prompt or schema rather than the retry.
+3. **The check or the case is wrong.** A check that is too strict, or a target that changed (a repository renamed,
+   a user deleted their repos). Fix the case, and re-record.
+4. **The environment.** Reported as `INFRA`, exit code 2. Re-run later.
 
-```bash
-python evals/run_evals.py --verbose
-```
+## CI
 
-Verify the previously-failed test now passes.
+- `tests.yml` runs on every push and pull request: the unit tests on Python 3.10-3.12, and the **offline evals**
+  (`--replay`), which fail the build on any failure.
+- `evals.yml` runs the **live evals** weekly and on demand. It needs repository secrets `OPENAI_API_KEY` and
+  `TAVILY_API_KEY`; GitHub access uses the workflow's own token. It exits non-zero on a regression, a case below the
+  bar, infrastructure problems, or a configuration problem, and uploads the report as an artifact. It does not run
+  on pull requests: fork pull requests cannot read secrets, and a live run costs money.
 
-### 7. Iterate
+## Checking that the evals can fail
 
-Repeat steps 1-6 until pass rate ≥ 80%.
+Green results prove nothing on their own. To confirm the suite is sensitive, break an agent on purpose and check
+that the matching case turns red. The technique used when this suite was built: patch one function in-process
+(make `_risk_level` return `"Low"`, make the planner append a code block, make a specialist run on the wrong repo,
+make a finding carry an invented CVE ID), run the one relevant case live, and expect `FAIL`. All 13 defects tried
+were caught. Seven were missed on the first attempt: six because the mutation harness patched the wrong name (so
+nothing was actually broken), and one because `risk_consistent` trusted the code it was testing. Fixing that check
+is what turned the last miss into a catch.
 
----
+## What the evals do not cover
 
-## Common Patterns for Improving Pass Rates
-
-### Pattern 1: Improve Prompt
-
-If LLM output is wrong, improve the system or user prompt:
-
-```python
-# agents/my_agent/prompts.py
-
-# ❌ Too vague
-SYSTEM_PROMPT = "You are a helpful assistant."
-
-# ✅ Specific, with guardrails
-SYSTEM_PROMPT = """You are a technical assistant specializing in GitHub analysis.
-Your job is to:
-1. Analyze the provided repository
-2. Extract key information (name, description, setup steps)
-3. Return ONLY a valid JSON object
-
-IMPORTANT: Do NOT invent information. Use ONLY facts from provided data."""
-```
-
-### Pattern 2: Add Error Handling
-
-Graceful degradation improves pass rate:
-
-```python
-# agents/my_agent/logic.py
-
-try:
-    data = fetch_repo(url)
-except Exception as e:
-    logger.error(f"Failed to fetch: {e}")
-    # Return graceful error instead of crashing
-    return {
-        "error_message": f"Failed to fetch repository: {str(e)[:100]}",
-        "status": "error"
-    }
-```
-
-### Pattern 3: Improve Parsing
-
-Make output parsing more robust:
-
-```python
-# ❌ Fragile: assumes exact format
-guide = json.loads(response)
-
-# ✅ Robust: handles markdown code blocks
-clean_response = response.strip()
-if clean_response.startswith("```"):
-    # Extract JSON from markdown
-    lines = clean_response.split("\n")[1:-1]
-    clean_response = "\n".join(lines)
-guide = json.loads(clean_response)
-```
-
-### Pattern 4: Add Fallback Logic
-
-Use fallback APIs to improve reliability:
-
-```python
-# agents/my_agent/logic.py
-
-try:
-    results = search(query, max_results=5)  # Tavily primary
-except Exception as e:
-    logger.warning(f"Primary search failed, using fallback: {e}")
-    results = search_fallback(query)  # DuckDuckGo fallback
-```
-
----
-
-## Evaluation Metrics Explained
-
-Each test case has a `check` rule:
-
-| Rule | What It Tests | Example |
-|------|---------------|---------|
-| **min_count** | Output has minimum items | Blog Scout returns ≥3 ideas |
-| **has_source_url** | All items have URLs | Each idea has a valid link |
-| **has_structure** | Output has required fields | Dict has `top_items` list |
-| **no_code_generation** | No code in output | Issue Planner returns plan, not code |
-| **error_handling** | Errors handled gracefully | Returns `error_message` on failure |
-| **input_validation** | Bad input rejected | Empty input returns error message |
-| **has_plan_structure** | Plan format is correct | Plan is 150-400 words, not code |
-| **keyword_presence** | Output contains key terms | Blog ideas mention topic |
-| **manual** | Human inspection needed | Requires manual review |
-
----
-
-## Realistic Pass Rate Targets
-
-Different agents have different difficulty levels:
-
-| Agent | Difficulty | Initial | Target | Why |
-|-------|-----------|---------|--------|-----|
-| **Blog Scout** | ⭐ Low | 80%+ | 90%+ | Simple search + LLM |
-| **Repo Onboarding** | ⭐⭐ Medium | 60-70% | 85%+ | Depends on repo quality |
-| **CVE Impact** | ⭐⭐ Medium | 60% | 80%+ | Security info varies |
-| **Issue Planner** | ⭐⭐⭐ Hard | 50-60% | 80%+ | Requires context understanding |
-| **Do I Care?** | ⭐⭐⭐ Hard | 60% | 80%+ | Subjective relevance scoring |
-| **Opportunity Scout** | ⭐⭐⭐ Hard | 50-60% | 80%+ | Career analysis is complex |
-
----
-
-## Step-by-Step Example: Fixing `do_i_care`
-
-Suppose Do I Care? has 60% pass rate:
-
-### Step 1: Run verbose evals
-```bash
-python evals/run_evals.py --verbose
-```
-
-Output:
-```
-📊 Testing do_i_care...
-    ✅ Test 1/5
-    ✅ Test 2/5
-    ❌ Test 3/5  ← Fails here
-    ✅ Test 4/5
-    ❌ Test 5/5
-   ⚠️ Pass rate: 3/5 (60%)
-```
-
-### Step 2: Check the failing test
-```bash
-# agents/do_i_care/evals.jsonl
-# Line 3 (Test 3):
-{"input": [], "expected_behavior": "Should return error message about empty input", "check": "input_validation"}
-```
-
-**Issue:** Passing empty list, should return error.
-
-### Step 3: Run manually
-```python
-from agents.do_i_care.logic import run_do_i_care
-
-result = run_do_i_care([])  # Empty input
-print(result)
-# Output: {"error_message": "No headlines provided", "status": "error"}
-```
-
-### Step 4: Check the validation rule
-```python
-# evals/run_evals.py
-def check_result(output, rule):
-    elif rule == "input_validation":
-        if isinstance(output, str):
-            return "error" in output.lower() or "please" in output.lower()
-        if isinstance(output, dict):
-            return "error_message" in output
-        return False
-```
-
-**Issue found:** The check works correctly! The agent is returning `error_message`, so validation should pass.
-
-### Step 5: Debug further
-```python
-# Actually run the eval
-from evals.run_evals import evaluate_do_i_care
-
-test_case = {"input": [], "check": "input_validation"}
-result = evaluate_do_i_care(test_case)
-print(f"Passed: {result}")  # Should be True
-```
-
-If still failing, check:
-- Is the agent raising an exception?
-- Is the error message in the dict?
-- Is the `input` being parsed correctly?
-
-### Step 6: Fix the issue
-```python
-# agents/do_i_care/logic.py
-
-def run_do_i_care(headlines_batch, user_profile=None):
-    # Add explicit check at start
-    if not headlines_batch:
-        return {
-            "error_message": "No headlines provided. Please enter at least one headline.",
-            "status": "error",
-        }
-    # ... rest of logic ...
-```
-
-### Step 7: Rerun evals
-```bash
-python evals/run_evals.py --verbose
-```
-
-Output should now show Test 3 passing:
-```
-📊 Testing do_i_care...
-    ✅ Test 1/5
-    ✅ Test 2/5
-    ✅ Test 3/5  ← Now passes!
-    ✅ Test 4/5
-    ❌ Test 5/5
-   ⚠️ Pass rate: 4/5 (80%)  ← Improved!
-```
-
----
-
-## Tips for 80%+ Achievement
-
-✅ **Do this:**
-1. Run evals frequently during development
-2. Improve prompts based on failure patterns
-3. Add robust error handling for edge cases
-4. Use fallback APIs when primary fails
-5. Test with real inputs (not mocked data)
-6. Iterate: fix one agent at a time
-
-❌ **Don't do this:**
-1. Ignore low pass rates
-2. Add special cases for specific tests (cheating)
-3. Relax test criteria (they're there for a reason)
-4. Skip manual testing (evals don't catch everything)
-5. Deploy with <80% pass rate on agents
-
----
-
-## Deployment Readiness Checklist
-
-- [ ] All agents have ≥80% pass rate
-- [ ] No hardcoded test data in logic
-- [ ] Evals run cleanly: `python evals/run_evals.py`
-- [ ] Manual spot-check: try each agent once
-- [ ] README.md has real pass rates (from last eval run)
-- [ ] All test cases documented
-
----
-
-## References
-
-- **Evals runner:** [evals/run_evals.py](./evals/run_evals.py)
-- **Agent structure:** [ARCHITECTURE.md](./ARCHITECTURE.md)
-- **Example agent:** [agents/blog_scout/](./agents/blog_scout/)
+- **Answer quality beyond structure and grounding.** Whether an onboarding guide is *good*, or a career suggestion
+  *wise*, is not checked; there is no LLM judge, and using the same model family to grade itself would be a weak
+  signal anyway.
+- **Behavior under attack it can't reproduce.** Prompt-injection resistance is covered by unit tests with hostile
+  inputs and by one live case (an injected headline), not by injected content in a real third-party repository.
+- **Orchestrator refusal of an ungrounded target.** Tests cover the check itself; a live case can't force the model
+  to pick a wrong target on demand.
+- **Anything replay can't see.** Replay checks recorded outputs; only a live run exercises current agent behavior
+  on networked cases.
+- **Sample size.** About 47 cases across 8 agents is a regression net, not a benchmark. Pass rates are not
+  statistically meaningful estimates of quality.

@@ -1,0 +1,46 @@
+{
+  "agent": "do_i_care",
+  "id": "nothing-relevant",
+  "input": [
+    "Profile: platform engineer at a fintech, moving workloads from VMs to Kubernetes",
+    "Local bakery wins regional award",
+    "Celebrity couple announces engagement",
+    "Football club signs new striker",
+    "Recipe: a simple lemon cake",
+    "Weather: sunny weekend ahead"
+  ],
+  "recorded_at": "2026-09-21T05:31:51+00:00",
+  "output": {
+    "status": "success",
+    "top_items": [],
+    "scores": [
+      {
+        "headline": "Local bakery wins regional award",
+        "score": 1
+      },
+      {
+        "headline": "Celebrity couple announces engagement",
+        "score": 1
+      },
+      {
+        "headline": "Football club signs new striker",
+        "score": 1
+      },
+      {
+        "headline": "Recipe: a simple lemon cake",
+        "score": 1
+      },
+      {
+        "headline": "Weather: sunny weekend ahead",
+        "score": 1
+      }
+    ],
+    "original_count": 5,
+    "analyzed_count": 5,
+    "skipped_count": 0,
+    "profile_used": "custom",
+    "profile": "platform engineer at a fintech, moving workloads from VMs to Kubernetes",
+    "analysis_available": true,
+    "message": "None of the 5 scored items looked relevant to this profile (none scored 5 or higher)."
+  }
+}

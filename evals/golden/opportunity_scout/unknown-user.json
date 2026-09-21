@@ -1,0 +1,10 @@
+{
+  "agent": "opportunity_scout",
+  "id": "unknown-user",
+  "input": "this-user-does-not-exist-zz9-qq",
+  "recorded_at": "2026-09-21T05:32:26+00:00",
+  "output": {
+    "error_message": "GitHub user not found: this-user-does-not-exist-zz9-qq",
+    "status": "error"
+  }
+}

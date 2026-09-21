@@ -1,0 +1,32 @@
+{
+  "agent": "blog_scout",
+  "id": "default-topics-null",
+  "input": null,
+  "recorded_at": "2026-09-21T05:29:26+00:00",
+  "output": [
+    {
+      "title": "Building the Future: The Rise of Internal Developer Platforms",
+      "pitch": "Explore how internal developer platforms are revolutionizing software development by enhancing autonomy and efficiency for engineering teams.",
+      "source_url": "https://www.redhat.com/en/blog/strategic-importance-platform-engineering-modern-software-development",
+      "source_title": "The strategic importance of platform engineering in modern software development"
+    },
+    {
+      "title": "AI-Driven Platform Engineering: The Next Frontier",
+      "pitch": "Delve into how AI is transforming platform engineering and enabling organizations to accelerate software delivery and improve developer productivity.",
+      "source_url": "https://cloud.google.com/blog/products/application-modernization/new-platform-engineering-research-report",
+      "source_title": "New platform engineering research report | Google Cloud Blog"
+    },
+    {
+      "title": "From Prototypes to Production: Mastering AI Agent Engineering",
+      "pitch": "Learn the critical steps and best practices for transitioning AI agent prototypes into robust, production-ready systems that can handle real-world challenges.",
+      "source_url": "https://activewizards.com/blog/ai-agent-engineering-the-definitive-guide",
+      "source_title": "Agent Engineering Guide: AI Agent Architecture, Frameworks, and Production Systems | ActiveWizards"
+    },
+    {
+      "title": "Navigating the AI-Native Era: Trends in Platform Engineering",
+      "pitch": "Unpack the major trends in platform engineering as we transition into an AI-native era and understand their implications for software development.",
+      "source_url": "https://platformengineering.org/blog/announcing-the-state-of-platform-engineering-vol-4",
+      "source_title": "Announcing the State of Platform Engineering Report Vol 4: December 16, 2025"
+    }
+  ]
+}

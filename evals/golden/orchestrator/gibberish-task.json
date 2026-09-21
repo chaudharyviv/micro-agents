@@ -1,0 +1,10 @@
+{
+  "agent": "orchestrator",
+  "id": "gibberish-task",
+  "input": "asdkfjasdlkfj random gibberish task with no clear intent",
+  "recorded_at": "2026-09-21T05:33:03+00:00",
+  "output": {
+    "error_message": "Could not determine which specialist(s) to use for this task. Try being more specific (mention a repo URL, GitHub username, issue URL, or topic).",
+    "status": "error"
+  }
+}

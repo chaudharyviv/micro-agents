@@ -1,0 +1,11 @@
+{
+  "agent": "issue_fix_planner",
+  "id": "unknown-issue",
+  "input": "https://github.com/nonexistent-owner-zz9/no-such-repo-zz9/issues/999",
+  "recorded_at": "2026-09-21T05:31:45+00:00",
+  "output": {
+    "error_message": "Issue not found: https://github.com/nonexistent-owner-zz9/no-such-repo-zz9/issues/999",
+    "issue_url": "https://github.com/nonexistent-owner-zz9/no-such-repo-zz9/issues/999",
+    "status": "error"
+  }
+}

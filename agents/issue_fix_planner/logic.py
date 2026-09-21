@@ -10,16 +10,17 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from core.github_tool import fetch_issue, fetch_repo, GitHubAPIError
 from core.llm import call_llm, LLMUnavailableError
+from core.llm_utils import wrap_untrusted
 from core.search import search
 from agents.issue_fix_planner.prompts import (
     SYSTEM_PROMPT,
     USER_PROMPT_TEMPLATE,
-    SEARCH_PROMPT,
-    FILE_ANALYSIS_PROMPT,
 )
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+MAX_ISSUE_BODY_CHARS = 4000
 
 
 def run_issue_fix_planner(issue_url: str) -> dict:
@@ -97,9 +98,8 @@ Related Search Results:
 
     user_prompt = USER_PROMPT_TEMPLATE.format(
         issue_url=issue_url,
-        issue_title=issue_title,
-        issue_body=issue_body,
-        repo_data=repo_context,
+        issue_details=wrap_untrusted(f"Title: {issue_title}\nBody: {(issue_body or '')[:MAX_ISSUE_BODY_CHARS]}"),
+        repo_data=wrap_untrusted(repo_context),
     )
 
     try:

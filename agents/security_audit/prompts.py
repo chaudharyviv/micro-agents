@@ -1,5 +1,19 @@
 """Prompts for Security Audit agent."""
 
+from core.llm_utils import INT, STR, arr, enum, obj
+
+# Strict structured-output schema: the API guarantees this shape, and overall_risk is one of four values.
+RESPONSE_SCHEMA = obj(
+    repo_url=STR,
+    audit_summary=STR,
+    overall_risk=enum("Critical", "High", "Medium", "Low"),
+    critical_issues=arr(obj(issue=STR, impact=STR, remediation=STR)),
+    safe_contribution_practices=arr(STR),
+    onboarding_security_checklist=arr(STR),
+    remediation_roadmap=arr(obj(phase=INT, timeframe=STR, actions=arr(STR))),
+    security_recommendations=arr(STR),
+)
+
 SYSTEM_PROMPT = """You are a comprehensive security auditor. Your role is to synthesize repository
 information, contributor onboarding needs, and CVE vulnerability data into a single, actionable
 security audit report.
@@ -30,14 +44,10 @@ Repository: {repo_url}
 Name: {repo_name}
 
 === CONTRIBUTOR ONBOARDING GUIDE ===
-<untrusted_data>
 {onboarding_guide}
-</untrusted_data>
 
 === SECURITY VULNERABILITY ANALYSIS ===
-<untrusted_data>
 {cve_analysis}
-</untrusted_data>
 
 Generate a unified security audit as a JSON object:
 {{

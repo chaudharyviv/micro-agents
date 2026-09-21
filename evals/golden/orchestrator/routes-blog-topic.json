@@ -1,0 +1,22 @@
+{
+  "agent": "orchestrator",
+  "id": "routes-blog-topic",
+  "input": "Suggest blog post ideas about Rust programming",
+  "recorded_at": "2026-09-21T05:32:47+00:00",
+  "output": {
+    "report": "Here are some blog post ideas about Rust programming, each with a brief description:\n\n1. **Unlocking Concurrency: How Rust's Ownership Model Enhances Performance**\n   - Explore how Rust's unique ownership model not only ensures memory safety but also empowers developers to write highly concurrent applications with confidence.\n   - [Source](https://www.rust-lang.org/en-US)\n\n2. **From C to Rust: Transitioning to a Safer Programming Paradigm**\n   - This post will guide software engineers through the process of transitioning from C/C++ to Rust, highlighting the benefits of Rust's safety features and modern tooling.\n   - [Source](https://medium.com/codex/rust-101-everything-you-need-to-know-about-rust-f3dd0ae99f4c)\n\n3. **Building Efficient CLI Tools with Rust: A Step-by-Step Guide**\n   - Learn how to leverage Rust's powerful ecosystem to create fast and reliable command-line tools, making your development process more efficient.\n   - [Source](https://www.rust-lang.org/en-US)\n\n4. **Why Rust is the Future of Systems Programming**\n   - Discuss the growing popularity of Rust in systems programming and how its features address the challenges faced by traditional languages like C and C++.\n   - Source (`https://en.wikipedia.org/wiki/Rust_(programming_language`))\n\n5. **The Role of Rust in WebAssembly: Bridging Performance and Portability**\n   - Investigate how Rust is revolutionizing web development through WebAssembly, enabling high-performance applications that run seamlessly across platforms.\n   - [Source](https://www.rust-lang.org/en-US)\n\nThese topics can help engage readers interested in Rust and its applications in various domains.",
+    "sources": [
+      "https://en.wikipedia.org/wiki/Rust_(programming_language)",
+      "https://medium.com/codex/rust-101-everything-you-need-to-know-about-rust-f3dd0ae99f4c",
+      "https://www.rust-lang.org/en-US"
+    ],
+    "specialists_used": [
+      {
+        "specialist": "blog_scout",
+        "input": "Rust programming"
+      }
+    ],
+    "used_memory": false,
+    "status": "success"
+  }
+}

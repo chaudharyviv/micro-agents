@@ -1,5 +1,6 @@
 """Multi-tab Streamlit interface for Micro-Agents project."""
 
+import re
 import sys
 import time
 from pathlib import Path
@@ -8,9 +9,14 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 import streamlit as st
 
-# Per-browser-session cooldown + request cap
+# Per-browser-session cooldown + request cap (friendly UX limits; a reload resets them)
 MIN_SECONDS_BETWEEN_REQUESTS = 5
 MAX_REQUESTS_PER_SESSION = 20
+
+# Per-client request limit, kept in the server process so a reload doesn't reset it. Best-effort:
+# the client id is the connection's IP address, which Streamlit documents as spoofable. The global
+# model-call budget in core/budget.py is what actually caps spend.
+CLIENT_MAX_REQUESTS_PER_HOUR = 20
 
 # Shared result cache settings
 SHARED_CACHE_TTL_SECONDS = 3600
@@ -25,7 +31,10 @@ from agents.opportunity_scout.logic import run_opportunity_scout
 from agents.security_audit.logic import generate_security_audit
 from agents.orchestrator.logic import run_orchestrator
 from agents.orchestrator.prompts import DEFAULT_TASKS
+from core.budget import get_budget, request_scope
 from core.memory import ResultCache, SessionMemory, run_with_memory
+from core.ratelimit import SlidingWindowLimiter
+from core.safe_markdown import collect_urls, sanitize_markdown, urls_in_text
 
 # Set page configuration
 st.set_page_config(
@@ -92,13 +101,14 @@ def format_blog_ideas(ideas):
 
     output = []
     for i, idea in enumerate(ideas, 1):
-        title = idea.get("title", "N/A")
-        pitch = idea.get("pitch", "N/A")
-        source_title = idea.get("source_title", "N/A")
-        source_url = idea.get("source_url", "N/A")
-        output.append(
-            f"### Idea {i}: {title}\n**Pitch:** {pitch}\n**Source:** [{source_title}]({source_url})\n"
-        )
+        title = _md_escape(idea.get("title", "N/A"))
+        pitch = _md_escape(idea.get("pitch", "N/A"))
+        source_title = _md_escape(idea.get("source_title") or "source")
+        source_url = idea.get("source_url", "")
+        entry = f"### Idea {i}: {title}\n**Pitch:** {pitch}\n"
+        if source_url:
+            entry += f"**Source:** [{source_title}]({source_url})\n"
+        output.append(entry)
     return "\n".join(output)
 
 
@@ -123,6 +133,11 @@ def format_guide(guide):
     return "\n".join(output)
 
 
+def _md_escape(text) -> str:
+    """Escape markdown/HTML control characters in third-party text before rendering it."""
+    return re.sub(r"([\\`*_{}\[\]()<>#+!|~])", r"\\\1", str(text))
+
+
 def format_cve(analysis):
     """Format CVE analysis for display."""
     if "error_message" in analysis:
@@ -139,7 +154,30 @@ def format_cve(analysis):
         st.success(f"**Risk Level: {risk_level}** — Low security impact detected.")
 
     output = ["### Security Analysis Summary\n"]
-    output.append(f"{analysis.get('summary', 'N/A')}\n")
+    output.append(f"{_md_escape(analysis.get('summary', 'N/A'))}\n")
+
+    findings = analysis.get("cve_analysis", [])
+    if findings:
+        output.append("### Known vulnerabilities\n")
+        for f in findings:
+            basis = " *(declared range floor; installed version may be newer)*" if f.get("version_basis") == "range_floor" else ""
+            output.append(
+                f"- **{_md_escape(f.get('cve_id', 'N/A'))}** · {f.get('severity', 'Unknown')} · "
+                f"`{_md_escape(f.get('package', ''))} {_md_escape(f.get('version', ''))}`{basis}\n"
+                f"  {_md_escape(f.get('description', ''))}\n"
+                + (f"  *Impact:* {_md_escape(f['impact'])}\n" if f.get("impact") else "")
+                + f"  *Fix:* {_md_escape(f.get('remediation', ''))} [Advisory]({f.get('url', '')})"
+            )
+        output.append("")
+
+    unchecked = analysis.get("dependencies_unchecked", [])
+    not_analyzed = analysis.get("manifests_not_analyzed", [])
+    output.append(
+        f"*Checked {analysis.get('dependencies_checked', 0)} dependencies against OSV.dev. "
+        f"Not checked: {len(unchecked)} dependencies without a resolvable version"
+        + (f"; manifests not analyzed: {', '.join(not_analyzed)}" if not_analyzed else "")
+        + ".*"
+    )
     return "\n".join(output)
 
 
@@ -155,23 +193,71 @@ def format_analysis(result):
     if result.get("status") == "error":
         return f":material/error: Error: {result.get('error_message')}"
     output = []
+    if result.get("message"):
+        output.append(f"**{_md_escape(result['message'])}**\n")
     for item in result.get("top_items", []):
-        if "rank" in item:
-            output.append(f"## #{item['rank']}: {item['headline']}\n")
-    return "\n".join(output) if output else "No analysis available"
+        output.append(f"## #{item['rank']}: {_md_escape(item['headline'])}\n")
+        output.append(f"**Relevance:** {item['score']}/10" + (f" — {_md_escape(item['score_reason'])}" if item.get("score_reason") else "") + "\n")
+        if item.get("why_it_matters"):
+            output.append(f"**Why it matters:** {_md_escape(item['why_it_matters'])}\n")
+        if item.get("suggested_action"):
+            output.append(f"**Suggested action:** {_md_escape(item['suggested_action'])}\n")
+    if result.get("top_items") and not result.get("analysis_available", True):
+        output.append("*The explanation step failed, so only scores are shown. Try again for a fuller analysis.*\n")
+
+    others = result.get("scores", [])[len(result.get("top_items", [])):]
+    if others:
+        output.append("### Other items\n")
+        output.extend(f"- {s['score']}/10 · {_md_escape(s['headline'])}" for s in others)
+        output.append("")
+
+    profile = "your profile" if result.get("profile_used") == "custom" else "the default profile (senior engineer: AI/ML, system design, developer tools)"
+    footer = f"*Scored {result.get('analyzed_count', 0)} of {result.get('original_count', 0)} items against {profile}."
+    if result.get("skipped_count"):
+        footer += f" {result['skipped_count']} items beyond the first 20 were not scored."
+    footer += " To use your own profile, make the first line `Profile: …`.*"
+    output.append(footer)
+    return "\n".join(output)
 
 
 def format_opportunities(result):
     """Format opportunity analysis for display."""
     if result.get("status") == "error":
         return f":material/error: Error: {result.get('error_message')}"
+    ev = result.get("evidence", {})
     output = [
         "# Career Opportunities\n",
-        f"**Developer:** @{result.get('github_username')}\n\n",
-        f"## Skill Gaps\n{result.get('skill_gaps', 'N/A')}\n\n",
-        f"## Job Suggestions\n{result.get('job_suggestions', 'N/A')}\n\n",
-        f"## 3-Day Project Idea\n{result.get('project_idea', 'N/A')}",
+        f"**Developer:** @{_md_escape(result.get('github_username'))}\n",
+        f"*Based on {ev.get('repos_analyzed', 0)} public non-fork repositories "
+        f"({ev.get('repos_pushed_last_12_months', 0)} active in the last 12 months). "
+        "Private work and non-GitHub experience are not visible.*\n",
     ]
+
+    if result.get("current_skills"):
+        output.append("## Skills demonstrated\n" + ", ".join(_md_escape(s) for s in result["current_skills"]) + "\n")
+
+    output.append("## Skill gaps\n")
+    for g in result.get("skill_gaps", []):
+        line = f"- **{_md_escape(g['skill'])}**: {_md_escape(g['reason'])}"
+        if g.get("source_url"):
+            line += f" ([source]({g['source_url']}))"
+        else:
+            line += " *(model judgment, not from a search result)*"
+        output.append(line)
+
+    output.append("\n## Job suggestions\n")
+    for o in result.get("job_suggestions", []):
+        output.append(f"- **{_md_escape(o['role'])}**: {_md_escape(o['fit'])}")
+
+    idea = result.get("project_idea", {})
+    output.append(f"\n## 3-day project idea\n**{_md_escape(idea.get('title', ''))}**\n\n{_md_escape(idea.get('description', ''))}")
+    if idea.get("skills_built"):
+        output.append("\n*Builds:* " + ", ".join(_md_escape(s) for s in idea["skills_built"]))
+
+    sources = result.get("market_sources", [])
+    if sources:
+        output.append("\n### Market sources consulted\n")
+        output.extend(f"- [{_md_escape(s['title'] or s['url'])}]({s['url']})" for s in sources)
     return "\n".join(output)
 
 
@@ -186,6 +272,21 @@ def format_audit(audit):
 def get_shared_cache() -> ResultCache:
     """Shared cache across sessions."""
     return ResultCache(ttl_seconds=SHARED_CACHE_TTL_SECONDS, max_entries=SHARED_CACHE_MAX_ENTRIES)
+
+
+@st.cache_resource
+def get_client_limiter() -> SlidingWindowLimiter:
+    """Process-wide per-client request limiter, shared by all sessions."""
+    return SlidingWindowLimiter(CLIENT_MAX_REQUESTS_PER_HOUR, 3600)
+
+
+def get_client_id() -> str:
+    """Best-effort identity of the caller: their connection IP, or 'local' when Streamlit gives none."""
+    try:
+        ip = st.context.ip_address
+    except Exception:
+        return "local"
+    return ip if isinstance(ip, str) and ip else "local"
 
 
 def get_session_memory() -> SessionMemory:
@@ -239,14 +340,14 @@ AGENT_INFO = {
         "memory_detail": "Cached for 1 hour per issue URL.",
     },
     "do_i_care": {
-        "description": "Scores headlines for relevance and explains key takeaways.",
+        "description": "Scores each headline for relevance to a profile, keeps the top few, and explains why each matters and what to do.",
         "tools": ["LLM"],
         "memory": "Session memory",
         "memory_detail": "Saved to session history.",
     },
     "opportunity_scout": {
-        "description": "Compares developer GitHub activity against market trends to suggest skill paths.",
-        "tools": ["Web search", "LLM"],
+        "description": "Compares a developer's public GitHub repositories against current job-market search results to suggest skill gaps, roles and a project.",
+        "tools": ["GitHub API", "Web search", "LLM"],
         "memory": "Session memory",
         "memory_detail": "Saved to session history.",
     },
@@ -278,18 +379,27 @@ def render_agent_info(agent_key: str) -> None:
 
 
 def _rate_limit_ok() -> bool:
-    """Enforce per-session cooldowns and request caps."""
+    """Enforce the per-session cooldown/cap and the per-client hourly request limit."""
     count = st.session_state.get("request_count", 0)
     if count >= MAX_REQUESTS_PER_SESSION:
         st.error(
             f":material/block: Session limit reached ({MAX_REQUESTS_PER_SESSION} requests). "
-            "Reload page to reset limits."
+            "Please try again later."
         )
         return False
 
     elapsed = time.time() - st.session_state.get("last_request_at", 0)
     if elapsed < MIN_SECONDS_BETWEEN_REQUESTS:
         st.warning(f"Cooldown active: Wait {MIN_SECONDS_BETWEEN_REQUESTS - elapsed:.0f}s before retrying.")
+        return False
+
+    limiter, client = get_client_limiter(), get_client_id()
+    if not limiter.allow(client):
+        minutes = -(-limiter.retry_after(client) // 60)
+        st.error(
+            f":material/block: Request limit reached ({CLIENT_MAX_REQUESTS_PER_HOUR} per hour). "
+            f"Please try again in about {minutes} minute{'s' if minutes != 1 else ''}."
+        )
         return False
 
     st.session_state["last_request_at"] = time.time()
@@ -346,9 +456,11 @@ def render_agent_tab(
         return
 
     with st.spinner("Running agent workflow..."):
-        result, cache_hit = run_with_memory(
-            agent_key, value, run, get_shared_cache(), get_session_memory(), before_run=_rate_limit_ok
-        )
+        # Caps the model calls this action can trigger and attributes them to this client.
+        with request_scope(client_id=get_client_id()):
+            result, cache_hit = run_with_memory(
+                agent_key, value, run, get_shared_cache(), get_session_memory(), before_run=_rate_limit_ok
+            )
 
     if result is None:
         return
@@ -357,7 +469,9 @@ def render_agent_tab(
         st.badge("Retrieved from shared cache (0 API calls)", icon=":material/memory:", color="green")
 
     with st.container(border=True):
-        st.markdown(format_result(result))
+        # Links: only URLs the user typed, or structured URL fields of the result (advisory and
+        # source links). Images are removed; everything else is shown as inert text.
+        st.markdown(sanitize_markdown(format_result(result), collect_urls(result) | urls_in_text(value)))
 
 
 def render_orchestrator_tab():
@@ -395,17 +509,20 @@ def render_orchestrator_tab():
             status.update(label="Querying session memory...")
             status.write("🔍 **Recall Tool:** Querying session vector history...")
         elif event == "tool_call_start":
-            tool, tool_input = payload["tool"], payload["args"].get("input", "")
+            tool = str(payload["tool"]).replace("`", "")
+            tool_input = str(payload["args"].get("input", "")).replace("`", "'")
             status.update(label=f"Executing tool `{tool}`...")
             status.markdown(f"🛠️ **Tool Call:** `{tool}`\n```text\nInput: {tool_input}\n```")
         elif event == "memory_hit":
-            status.write(f"⚡ `{payload['tool']}` output loaded from shared cache.")
+            status.write(f"⚡ `{str(payload['tool']).replace('`', '')}` output loaded from shared cache.")
         elif event == "tool_call_end":
             output = payload["output"]
             if isinstance(output, dict) and "error" in output:
-                status.write(f"❌ `{payload['tool']}` returned error: {output['error']}")
+                status.write(f"❌ `{str(payload['tool']).replace('`', '')}` returned error: {_md_escape(output['error'])}")
             else:
-                status.write(f"✅ `{payload['tool']}` step completed successfully.")
+                status.write(f"✅ `{str(payload['tool']).replace('`', '')}` step completed successfully.")
+        elif event == "tool_limit_reached":
+            status.write("⚠️ Tool call limit reached — generating response with the results gathered so far.")
         elif event == "step_limit_reached":
             status.write("⚠️ Max step limit reached — generating response with partial outputs.")
         elif event == "final":
@@ -413,7 +530,8 @@ def render_orchestrator_tab():
             status.write("📝 **Synthesizing Final Output...**")
 
     session = get_session_memory()
-    result = run_orchestrator(task_value, on_event=on_event, session=session, cache=get_shared_cache())
+    with request_scope(client_id=get_client_id(), max_calls=get_budget().limits.orchestrator_request_calls):
+        result = run_orchestrator(task_value, on_event=on_event, session=session, cache=get_shared_cache())
 
     if result.get("status") == "error":
         status.update(label="Execution Failed", state="error", expanded=True)
@@ -434,7 +552,12 @@ def render_orchestrator_tab():
                 st.badge("Session Memory", icon=":material/memory:", color="green")
 
     with st.container(border=True):
-        st.markdown(result.get("report", "No report generated"))
+        st.markdown(
+            sanitize_markdown(
+                result.get("report", "No report generated"),
+                set(result.get("sources", [])) | urls_in_text(task_value),
+            )
+        )
 
 
 def render_memory_panel() -> None:
@@ -461,8 +584,8 @@ def render_memory_panel() -> None:
     for r in runs:
         label = f"{r['agent']} · {r['age_seconds']}s ago" + (" (cached)" if r["cached"] else "")
         with st.expander(label, icon=":material/history:"):
-            st.caption(f"**Input:** {r['input'][:100]}...")
-            st.caption(r["summary"])
+            st.caption(f"**Input:** {_md_escape(r['input'][:100])}...")
+            st.caption(_md_escape(r["summary"]))
             
     if runs and st.button("Clear Session Memory", icon=":material/delete:", use_container_width=True):
         session.clear()
@@ -589,8 +712,8 @@ with care_tab:
     render_agent_tab(
         agent_key="do_i_care",
         form_key="do_i_care_form",
-        label="Headlines (one per line)",
-        placeholder="Enter news items...",
+        label="Headlines (one per line). Optional first line: Profile: what you care about",
+        placeholder="Profile: backend engineer moving into data infrastructure\nEnter news items...",
         button_label="Analyze Relevance",
         run=lambda text: run_do_i_care([line.strip() for line in text.split("\n") if line.strip()]),
         format_result=format_analysis,

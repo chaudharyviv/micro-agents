@@ -17,10 +17,10 @@ See [Deployment](#deployment) for instructions to run this locally or deploy you
 | **Orchestrator** | Agent harness: model picks tool(s), calls them, synthesizes | Free-text task | Synthesized Markdown report | ⭐⭐⭐ |
 | **Blog Idea Scout** | Level 1: Search → LLM | Topic (or "trending") | 3-5 blog ideas with pitches & URLs | ⭐ |
 | **Repo Onboarding** | Level 3: Fetch Repo → Search → LLM | Repo URL | Comprehensive onboarding guide | ⭐⭐ |
-| **CVE Impact** | Level 3: Search → LLM | CVE ID / Software | Security assessment & remediation | ⭐⭐ |
+| **CVE Impact** | Level 3: Fetch Repo → Parse Manifests → OSV.dev → LLM prose | Repo URL | Known vulnerabilities in declared dependencies, with fixed versions | ⭐⭐ |
 | **Issue Fix Planner** | Level 4: Fetch Issue → Search → LLM → Plan | Issue URL | Implementation plan (no code) | ⭐⭐ |
-| **Do I Care?** | Level 5: Score → Filter → Analyze | Headlines + Profile | Top 3 with why & actions | ⭐⭐ |
-| **Opportunity Scout** | Level 5: Analyze → Trends → Opportunities | GitHub Username | Skill gaps, jobs, project ideas | ⭐⭐ |
+| **Do I Care?** | Level 5: Score → Filter → Analyze | Headlines (+ optional `Profile:` first line) | Up to 3 relevant items with why & action | ⭐⭐ |
+| **Opportunity Scout** | Level 5: GitHub API → Market Search → LLM | GitHub Username | Skill gaps (with sources), roles, project idea | ⭐⭐ |
 | **Security Audit** | Level 5: combines Onboarding + CVE Impact | Repo URL | Unified security audit report | ⭐⭐ |
 
 **Pattern Levels:**
@@ -75,8 +75,8 @@ python agents/repo_onboarding/logic.py
 python agents/issue_fix_planner/logic.py
 # ... and so on
 
-# Run all evaluations
-python evals/run_evals.py
+# Run the offline evaluations (free, no keys). Drop --replay for the live suite, which calls real APIs.
+python evals/run_evals.py --replay
 ```
 
 ---
@@ -85,7 +85,30 @@ python evals/run_evals.py
 
 1. Push the repo to GitHub and create an app at [share.streamlit.io](https://share.streamlit.io) with `app.py` as the entry point.
 2. In **App settings → Secrets**, add `OPENAI_API_KEY` (required) plus optional `TAVILY_API_KEY` and `GITHUB_TOKEN`. Streamlit Cloud exposes top-level secrets as environment variables, which is where the `core/` modules read them.
-3. Set a monthly spend cap on the OpenAI key - the in-app cooldown and per-session request cap are only a soft guard.
+3. **Set a hard spending limit on the OpenAI key in the OpenAI dashboard.** The in-app limits below are a safeguard, not a substitute: they live in one process, reset when it restarts, and can't see other apps using the same key.
+
+**Usage limits on a public deployment.** Every model call goes through one gate (`core/budget.py`), and each attempt counts, retries included (the OpenAI SDK's own silent retries are turned off so nothing is uncounted):
+
+| Limit | Default | Environment variable |
+|-------|---------|----------------------|
+| Model calls per user action (an agent run) | 12 | `LLM_REQUEST_CALLS` |
+| Model calls per orchestrator run, specialists included | 20 | `LLM_ORCHESTRATOR_REQUEST_CALLS` |
+| Model calls per client per UTC day | 100 | `LLM_CLIENT_DAILY_CALLS` |
+| Model calls per UTC hour, all visitors | 300 | `LLM_HOURLY_CALLS` |
+| Model calls per UTC day, all visitors | 1,500 | `LLM_DAILY_CALLS` |
+| Tokens per UTC day, all visitors | 2,000,000 | `LLM_DAILY_TOKENS` |
+
+The orchestrator also runs at most 3 tool calls per task, however many the model asks for at once, and each visitor is limited to 20 requests per hour (cache hits are free and don't count). When a limit is reached the user sees which one, and no API call is made.
+
+- **The global limits are the real protection.** The per-client limits key on the connection's IP address, which Streamlit documents as spoofable, so a determined caller can get around them. The hourly cap stops such a caller from draining the whole day's budget in minutes.
+- **State is in memory.** A restart resets the counters, and they are not shared between processes. Set `BUDGET_STATE_FILE=path` to persist the global counters across restarts where the host's disk survives them.
+- The daily defaults are sized to stay around a dollar a day at `gpt-4o-mini` list prices; check current pricing and adjust them to your own budget.
+
+**Output safety.** Model output is shaped by text an attacker can write (READMEs, issues, search results), so it is handled defensively at three points:
+
+- **Structured outputs.** Agents that produce JSON ask the API for output that conforms to a strict JSON schema (`core/llm.py`, schemas in each agent's `prompts.py`), rather than asking for JSON in the prompt and hoping. A refusal or an output cut off by the length limit is reported as such and never retried, and never parsed as if it were complete.
+- **Untrusted text is delimited in one place.** All third-party text put in a prompt goes through `wrap_untrusted` (`core/llm_utils.py`), which strips look-alikes of the delimiter (including zero-width and full-width variants) so the text cannot close its own block. Prompt templates deliberately don't contain the delimiter, and a test enforces it. Tool results fed to the orchestrator are wrapped the same way, and truncation is marked.
+- **Rendered Markdown is sanitized** (`core/safe_markdown.py`). Images are removed, since an image loads its URL with no click and can carry data out. A link is kept only if its URL was named by the user or appears in a structured `url`-type field of a result; anything else, including bare URLs, `www.` links, reference-style links and raw HTML, is shown as inert text with the URL visible. URLs found inside free text (a README, a model's prose) are deliberately not trusted. The rewrite is verified by re-parsing the output with a CommonMark parser; if anything unsafe remains, all link syntax is escaped, and failing that the content is withheld. This is fuzz-tested against random adversarial input.
 
 **Memory on a public deployment.** Each agent = LLM + tools + memory, and memory is designed for shared, ephemeral hosting: nothing is written to disk.
 - **Session memory** (`SessionMemory`): each visitor's own run history, kept in their session and never shown to anyone else. The orchestrator's `recall_memory` tool reads it for follow-ups.
@@ -139,7 +162,12 @@ python evals/run_evals.py
 ```
 micro-agents/
 ├── core/                          # Shared API wrappers
-│   ├── llm.py                    # OpenAI (gpt-4o-mini), retried once
+│   ├── llm.py                    # OpenAI (gpt-4o-mini), retried once; every call goes through the budget gate
+│   ├── llm_utils.py              # Strict-schema builders, JSON extraction, untrusted-text wrapping
+│   ├── safe_markdown.py          # Link/image sanitizer for rendered Markdown
+│   ├── budget.py                 # Per-request / per-client / hourly / daily model-call and token limits
+│   ├── ratelimit.py              # Per-client sliding-window request limiter
+│   ├── targets.py                # Parses repo/issue/user targets for exact-match grounding
 │   ├── search.py                 # Tavily + DuckDuckGo fallback
 │   ├── github_tool.py            # GitHub REST API wrapper
 │   └── memory.py                 # Session memory + shared result cache (in-process, bounded)
@@ -155,7 +183,12 @@ micro-agents/
 │   └── security_audit/           # Level 5: combines onboarding + CVE analysis
 │
 ├── evals/                         # Evaluation suite
-│   └── run_evals.py              # Test runner (reports pass rate)
+│   ├── run_evals.py              # Eval runner: replay/live modes, exit codes, baseline
+│   ├── checks.py                 # The assertions cases are built from (each one tested)
+│   ├── cases.py                  # Loads and validates evals.jsonl
+│   ├── adapters.py               # How each agent is called from a case
+│   ├── golden/                   # Recorded outputs from live runs, for offline replay
+│   └── baseline.json             # Last accepted live run, for regression detection
 │
 ├── app.py                         # Streamlit multi-tab UI (main entry point)
 ├── requirements.txt               # Dependencies (no LangGraph, LangChain)
@@ -195,38 +228,39 @@ micro-agents/
 
 ---
 
-## Evaluation Results
+## Evaluation
 
-Each agent is tested against 3–5 test cases in `evals.jsonl`. Run evaluations:
+47 cases across all 8 agents (`agents/<agent>/evals.jsonl`). Each case runs an agent on a real input and asserts on
+the *content* of the result: whether it is grounded, ranked, routed and consistent, not merely whether something
+came back.
 
 ```bash
-python evals/run_evals.py              # Run all evals, show pass rates
-python evals/run_evals.py --verbose    # Show detailed test results
+python evals/run_evals.py --replay     # offline, free, no keys: what CI runs on every change
+python evals/run_evals.py              # live: real OpenAI, Tavily, GitHub and OSV.dev (about 40 model calls)
+python evals/run_evals.py -v --agent do_i_care --only ranks   # a subset, verbosely
 ```
 
-**How to Achieve 80%+ Pass Rates:**
+What makes the results trustworthy:
 
-See [EVALUATION_GUIDE.md](./EVALUATION_GUIDE.md) for detailed instructions on:
-- Understanding what pass rates mean
-- Running evaluations locally
-- Debugging and fixing failing tests
-- Improving agents from 60% → 80%+
+- **Assertions that can fail.** Examples: a CVE finding's ID must be a real OSV record for that package; every URL
+  Opportunity Scout cites must be one it was given; Do I Care's top items must be the relevant headlines and an
+  injected one must stay out; the orchestrator must run only the named repo and its report may contain no images
+  or unsourced links. Each check is itself tested against known-good and known-bad output.
+- **Validation cases really call the agent.** They run the real agent code with the network blocked.
+- **Exit codes** distinguish a quality failure (1) from infrastructure trouble (2) and a suite that couldn't run (3),
+  so CI can gate on them. A run also fails if a case that passed in `evals/baseline.json` now fails.
+- **Model spend is capped** per run, using the same budget gate as the app.
 
-**Target Pass Rates** (Production Readiness):
+CI runs the offline half on every push and pull request, and the live half weekly and on demand
+(`.github/workflows/`). See [EVALUATION_GUIDE.md](./EVALUATION_GUIDE.md) for the case format, the checks, how to add
+a case, and how to read a failure.
 
-| Agent | Target | Achieved | Test Cases |
-|-------|--------|-----------|------------|
-| blog_scout | ≥80% | ✅ 100% (5/5) | 5 (search + URL validation) |
-| repo_onboarding | ≥80% | ✅ 80% (4/5) | 5 (guide structure + completeness) |
-| cve_impact | ≥80% | ⚠️ 60% (3/5) | 5 (security assessment + error handling) |
-| issue_fix_planner | ≥80% | ✅ 80% (4/5) | 5 (no code generation guardrail) |
-| do_i_care | ≥80% | ⚠️ 40% (2/5) | 5 (relevance scoring + filtering) |
-| opportunity_scout | ≥80% | ✅ 80% (4/5) | 5 (career analysis + insights) |
-| orchestrator | ≥80% | ✅ 80% (4/5) | 5 (routing + synthesis) |
-
-**Overall: 74% (26/35)** — 5/7 agents at or above the 80% target. `cve_impact` and `do_i_care` are below target and tracked for improvement; see [EVALUATION_GUIDE.md](./EVALUATION_GUIDE.md) for how to debug and raise a specific agent's pass rate.
-
-*Generated via `python evals/run_evals.py`.*
+**Snapshot (2026-09-21).** Two consecutive live runs each passed 47 of 47 cases with no retries needed
+(38 and 40 model calls). To test the tests, 13 defects were injected into the agents one at a time (a risk level
+that ignores findings, an invented CVE ID, a fetcher that stops returning manifests, an injected headline scored
+10, a plan containing code, a report with an image, a specialist run on the wrong repo, and others); all 13 turned
+the matching case red. That is a small regression net, not a benchmark: it says nothing about answer quality
+beyond structure and grounding, which nothing here judges.
 
 ---
 
@@ -239,7 +273,7 @@ See [EVALUATION_GUIDE.md](./EVALUATION_GUIDE.md) for detailed instructions on:
    - `prompts.py` — system & user prompts
    - `logic.py` — core agent logic (imports from `core/`, smoke test in `__main__`)
 3. **Add to dashboard:** Import in root `app.py` and add a tab
-4. **Evaluate:** Add `evals.jsonl` with 3-5 test cases
+4. **Evaluate:** Add `evals.jsonl` cases with real assertions, record their output with `python evals/run_evals.py --record --agent my_agent`, and add the agent to `evals/cases.py` and `evals/adapters.py` (see [EVALUATION_GUIDE.md](./EVALUATION_GUIDE.md))
 
 ### Testing
 
@@ -247,8 +281,9 @@ See [EVALUATION_GUIDE.md](./EVALUATION_GUIDE.md) for detailed instructions on:
 # Test individual agent
 python agents/my_agent/logic.py
 
-# Run evaluations
-python evals/run_evals.py
+# Unit tests, then the offline evals (both run in CI)
+pytest
+python evals/run_evals.py --replay
 ```
 
 ### Design Constraints

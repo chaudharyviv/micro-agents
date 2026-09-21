@@ -1,0 +1,55 @@
+name: Live evals
+
+# Runs the evaluation suite against the real OpenAI, Tavily, GitHub and OSV.dev APIs. It costs a little money
+# (roughly 60-80 model calls; the runner caps a run at 250) and needs secrets, so it does not run on pull
+# requests: it runs weekly and on demand. The offline half runs on every change (see tests.yml).
+#
+# Required repository secrets: OPENAI_API_KEY, TAVILY_API_KEY. GitHub access uses the workflow's own token.
+#
+# The run fails (exit code 1) if an agent is below the 80% bar or a case that passed in evals/baseline.json now
+# fails. Exit code 2 means infrastructure problems (rate limits, outages) stopped cases from running, and code 3
+# means the suite couldn't run at all (missing key, invalid case files); both also fail the job.
+
+on:
+  schedule:
+    - cron: '0 6 * * 1'   # Mondays 06:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: live-evals
+  cancel-in-progress: false
+
+jobs:
+  evals:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+    - uses: actions/checkout@v4
+
+    - uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'
+        cache: pip
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+
+    - name: Run live evals
+      env:
+        OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        TAVILY_API_KEY: ${{ secrets.TAVILY_API_KEY }}
+        GITHUB_TOKEN: ${{ github.token }}
+      run: python evals/run_evals.py --verbose --json-out eval-report.json
+
+    - name: Upload the eval report
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: live-eval-report
+        path: eval-report.json
+        if-no-files-found: ignore

@@ -65,6 +65,10 @@ class SessionMemory:
         target = normalize_input(input)
         return any(normalize_input(e["input"]) == target for e in self._entries)
 
+    def inputs(self) -> list[str]:
+        """Every input recorded this session. Each was either typed by the user or passed validation."""
+        return [e["input"] for e in self._entries]
+
     def clear(self) -> None:
         self._entries.clear()
 

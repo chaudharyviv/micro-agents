@@ -1,0 +1,26 @@
+{
+  "agent": "blog_scout",
+  "id": "rust-topic",
+  "input": "Rust programming language",
+  "recorded_at": "2026-09-21T05:29:36+00:00",
+  "output": [
+    {
+      "title": "Unlocking the Power of Rust: A Guide for C++ Developers",
+      "pitch": "This blog post will explore how Rust addresses common pain points faced by C++ developers, making it an attractive alternative for systems programming.",
+      "source_url": "https://en.wikipedia.org/wiki/Rust_(programming_language)",
+      "source_title": "Rust (programming language)"
+    },
+    {
+      "title": "Rust vs. Other Languages: Why Choose Rust for Your Next Project?",
+      "pitch": "In this article, we will compare Rust with other popular programming languages, highlighting its unique features and advantages for modern software development.",
+      "source_url": "https://www.rust-lang.org/en-US",
+      "source_title": "Rust Programming Language"
+    },
+    {
+      "title": "Getting Started with Rust: A Beginner's Journey",
+      "pitch": "This post will provide a practical introduction to Rust for beginners, sharing tips and resources to help new developers quickly get up to speed with this powerful language.",
+      "source_url": "https://medium.com/codex/rust-101-everything-you-need-to-know-about-rust-f3dd0ae99f4c",
+      "source_title": "Rust 101 — Everything you need to know about Rust"
+    }
+  ]
+}

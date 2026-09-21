@@ -1,0 +1,125 @@
+{
+  "agent": "do_i_care",
+  "id": "input-limit-reported",
+  "input": [
+    "Local news item number 1",
+    "Local news item number 2",
+    "Local news item number 3",
+    "Local news item number 4",
+    "Local news item number 5",
+    "Local news item number 6",
+    "Local news item number 7",
+    "Local news item number 8",
+    "Local news item number 9",
+    "Local news item number 10",
+    "Local news item number 11",
+    "Local news item number 12",
+    "Local news item number 13",
+    "Local news item number 14",
+    "Local news item number 15",
+    "Local news item number 16",
+    "Local news item number 17",
+    "Local news item number 18",
+    "Local news item number 19",
+    "Local news item number 20",
+    "Local news item number 21",
+    "Local news item number 22",
+    "Local news item number 23",
+    "Local news item number 24",
+    "Local news item number 25"
+  ],
+  "recorded_at": "2026-09-21T05:32:07+00:00",
+  "output": {
+    "status": "success",
+    "top_items": [],
+    "scores": [
+      {
+        "headline": "Local news item number 1",
+        "score": 1
+      },
+      {
+        "headline": "Local news item number 2",
+        "score": 1
+      },
+      {
+        "headline": "Local news item number 3",
+        "score": 1
+      },
+      {
+        "headline": "Local news item number 4",
+        "score": 1
+      },
+      {
+        "headline": "Local news item number 5",
+        "score": 1
+      },
+      {
+        "headline": "Local news item number 6",
+        "score": 1
+      },
+      {
+        "headline": "Local news item number 7",
+        "score": 1
+      },
+      {
+        "headline": "Local news item number 8",
+        "score": 1
+      },
+      {
+        "headline": "Local news item number 9",
+        "score": 1
+      },
+      {
+        "headline": "Local news item number 10",
+        "score": 1
+      },
+      {
+        "headline": "Local news item number 11",
+        "score": 1
+      },
+      {
+        "headline": "Local news item number 12",
+        "score": 1
+      },
+      {
+        "headline": "Local news item number 13",
+        "score": 1
+      },
+      {
+        "headline": "Local news item number 14",
+        "score": 1
+      },
+      {
+        "headline": "Local news item number 15",
+        "score": 1
+      },
+      {
+        "headline": "Local news item number 16",
+        "score": 1
+      },
+      {
+        "headline": "Local news item number 17",
+        "score": 1
+      },
+      {
+        "headline": "Local news item number 18",
+        "score": 1
+      },
+      {
+        "headline": "Local news item number 19",
+        "score": 1
+      },
+      {
+        "headline": "Local news item number 20",
+        "score": 1
+      }
+    ],
+    "original_count": 25,
+    "analyzed_count": 20,
+    "skipped_count": 5,
+    "profile_used": "default",
+    "profile": "Senior software engineer interested in AI/ML, system design, and developer tools.\nFollows trends in machine learning infrastructure, distributed systems, and cloud-native technologies.\nLooking to develop expertise in LLM applications and MLOps.",
+    "analysis_available": true,
+    "message": "None of the 20 scored items looked relevant to this profile (none scored 5 or higher)."
+  }
+}

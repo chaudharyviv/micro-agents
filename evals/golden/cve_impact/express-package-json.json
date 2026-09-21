@@ -1,0 +1,74 @@
+{
+  "agent": "cve_impact",
+  "id": "express-package-json",
+  "input": "https://github.com/expressjs/express",
+  "recorded_at": "2026-09-21T05:30:56+00:00",
+  "output": {
+    "summary": "The express repository has identified two vulnerabilities in the 'qs' package version 6.15.2, which could potentially impact applications using this framework. Both vulnerabilities are addressed in the subsequent version 6.16.0.",
+    "risk_level": "Medium",
+    "cve_analysis": [
+      {
+        "cve_id": "CVE-2026-82417",
+        "advisory_ids": [
+          "GHSA-4mjr-xmp4-gh2g"
+        ],
+        "package": "qs",
+        "ecosystem": "npm",
+        "version": "6.15.2",
+        "version_basis": "range_floor",
+        "severity": "Medium",
+        "cvss_score": 5.3,
+        "description": "qs: Denial of Service via Attacker Controlled isBuffer",
+        "fixed_in": [
+          "6.16.0"
+        ],
+        "url": "https://osv.dev/vulnerability/GHSA-4mjr-xmp4-gh2g",
+        "source": "package.json",
+        "impact": "This Denial of Service vulnerability could allow an attacker to exploit the isBuffer function, potentially leading to application downtime or degraded performance.",
+        "remediation": "Upgrade qs to a fixed version (fixed in: 6.16.0)."
+      },
+      {
+        "cve_id": "CVE-2026-82562",
+        "advisory_ids": [
+          "GHSA-x5fp-wj9c-mxmx"
+        ],
+        "package": "qs",
+        "ecosystem": "npm",
+        "version": "6.15.2",
+        "version_basis": "range_floor",
+        "severity": "Low",
+        "cvss_score": 3.7,
+        "description": "qs array-limit bypass via bracket-key comma parsing",
+        "fixed_in": [
+          "6.16.0"
+        ],
+        "url": "https://osv.dev/vulnerability/GHSA-x5fp-wj9c-mxmx",
+        "source": "package.json",
+        "impact": "The array-limit bypass vulnerability could allow attackers to manipulate input parsing, which may lead to unexpected behavior or data exposure in applications relying on the 'qs' package.",
+        "remediation": "Upgrade qs to a fixed version (fixed in: 6.16.0)."
+      }
+    ],
+    "common_themes": [
+      "Denial of Service and input manipulation vulnerabilities"
+    ],
+    "remediation_priority": [
+      {
+        "rank": 1,
+        "action": "Upgrade qs 6.15.2: 2 known vulnerabilities, worst is Medium",
+        "fixes": [
+          "CVE-2026-82417",
+          "CVE-2026-82562"
+        ]
+      }
+    ],
+    "recommendations": [
+      "Regularly update dependencies to their latest versions to mitigate known vulnerabilities."
+    ],
+    "analysis_source": "osv+llm",
+    "dependencies_checked": 44,
+    "dependencies_unchecked": [],
+    "manifests_not_analyzed": [],
+    "data_source": "OSV.dev",
+    "repo_url": "https://github.com/expressjs/express"
+  }
+}

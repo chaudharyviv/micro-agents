@@ -1,6 +1,5 @@
 """Core logic for Security Audit agent (combines Onboarding + CVE Impact)."""
 
-import json
 import logging
 import sys
 from pathlib import Path
@@ -12,7 +11,9 @@ from agents.repo_onboarding.logic import generate_onboarding_guide
 from agents.cve_impact.logic import analyze_cve_impact
 from core.github_tool import fetch_repo, GitHubAPIError
 from core.llm import call_llm, LLMUnavailableError
+from core.llm_utils import extract_json, wrap_untrusted
 from agents.security_audit.prompts import (
+    RESPONSE_SCHEMA,
     SYSTEM_PROMPT,
     USER_PROMPT_TEMPLATE,
 )
@@ -93,12 +94,12 @@ def generate_security_audit(repo_url: str) -> dict:
     user_prompt = USER_PROMPT_TEMPLATE.format(
         repo_url=repo_url,
         repo_name=repo_name,
-        onboarding_guide=onboarding_text,
-        cve_analysis=cve_text,
+        onboarding_guide=wrap_untrusted(onboarding_text),
+        cve_analysis=wrap_untrusted(cve_text),
     )
 
     try:
-        llm_response = call_llm(user_prompt, system=SYSTEM_PROMPT)
+        llm_response = call_llm(user_prompt, system=SYSTEM_PROMPT, schema=RESPONSE_SCHEMA, schema_name="security_audit")
         logger.info(f"LLM response: {llm_response[:100]}...")
     except LLMUnavailableError as e:
         logger.error(f"LLM call failed: {e}")
@@ -117,7 +118,7 @@ def generate_security_audit(repo_url: str) -> dict:
         retry_prompt = user_prompt + "\n\n" + error_msg
 
         try:
-            llm_response = call_llm(retry_prompt, system=SYSTEM_PROMPT)
+            llm_response = call_llm(retry_prompt, system=SYSTEM_PROMPT, schema=RESPONSE_SCHEMA, schema_name="security_audit")
             audit = _parse_audit(llm_response, repo_url)
         except Exception as e:
             logger.error(f"LLM retry failed: {e}")
@@ -154,6 +155,15 @@ def _format_analysis_for_audit(analysis: dict) -> str:
     lines.append(f"Summary: {analysis.get('summary', 'N/A')}")
     lines.append(f"Risk Level: {analysis.get('risk_level', 'Unknown')}")
 
+    checked = analysis.get("dependencies_checked")
+    if checked is not None:
+        gaps = len(analysis.get("dependencies_unchecked", []))
+        skipped = analysis.get("manifests_not_analyzed", [])
+        lines.append(
+            f"Coverage: {checked} dependencies checked against OSV.dev, {gaps} not checked"
+            + (f"; manifests not analyzed: {', '.join(skipped)}" if skipped else "")
+        )
+
     cves = analysis.get("cve_analysis", [])
     if cves:
         lines.append(f"CVEs Found: {len(cves)}")
@@ -176,28 +186,14 @@ def _parse_audit(response: str, repo_url: str) -> Optional[dict]:
     Parse JSON response from LLM.
 
     Args:
-        response: LLM's JSON response (may be wrapped in markdown code blocks)
+        response: LLM's JSON response
         repo_url: Original repository URL for context
 
     Returns:
         Parsed audit dict, or None if parsing fails
     """
     try:
-        # Extract JSON from markdown code blocks if present
-        clean_response = response.strip()
-        if clean_response.startswith("```"):
-            lines = clean_response.split("\n")
-            json_lines = []
-            in_json = False
-            for line in lines:
-                if line.startswith("```"):
-                    in_json = not in_json
-                    continue
-                if in_json or (not line.startswith("```") and json_lines):
-                    json_lines.append(line)
-            clean_response = "\n".join(json_lines).strip()
-
-        audit = json.loads(clean_response)
+        audit = extract_json(response)
 
         if not isinstance(audit, dict):
             logger.error("Response is not a JSON object")
@@ -212,7 +208,7 @@ def _parse_audit(response: str, repo_url: str) -> Optional[dict]:
         logger.info(f"Successfully parsed security audit (risk: {audit.get('overall_risk')})")
         return audit
 
-    except json.JSONDecodeError as e:
+    except ValueError as e:
         logger.error(f"JSON parse error: {e}")
         return None
     except Exception as e:

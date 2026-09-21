@@ -9,8 +9,19 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
+from core.budget import get_budget, request_scope
+from core.errors import BudgetExceededError
 from core.harness import Tool, run_harness
 from core.memory import run_with_memory
+from core.safe_markdown import collect_urls, sanitize_markdown, urls_in_text
+from core.targets import (
+    extract_issue_refs,
+    extract_repo_refs,
+    extract_usernames,
+    parse_issue_ref,
+    parse_repo_ref,
+    parse_username,
+)
 from agents.blog_scout.logic import scout_blog_ideas
 from agents.repo_onboarding.logic import generate_onboarding_guide
 from agents.cve_impact.logic import analyze_cve_impact
@@ -33,41 +44,53 @@ def _run_do_i_care(input: str):
     return run_do_i_care(headlines)
 
 
+# input_kind says what the input identifies, and so how it is checked against the user's own words:
+# "repo" / "issue" / "user" are parsed and compared exactly; "text" (a topic or headlines) has no
+# identifier to parse, so it falls back to a fuzzy word-overlap check.
+MAX_TOOL_CALLS = 3
+
 # Every specialist's "run" takes a single input string and returns dict/list output.
 # Wrappers above normalize blog_scout (optional topic) and do_i_care (list of headlines)
 # to that same shape so each can be exposed as a uniform single-argument tool.
 SPECIALISTS = {
     "blog_scout": {
+        "input_kind": "text",
         "description": "Suggests blog post ideas backed by real search results, for a given topic.",
         "input_hint": "a topic (or leave blank / use 'trending')",
         "run": _run_blog_scout,
     },
     "repo_onboarding": {
+        "input_kind": "repo",
         "description": "Generates a contributor onboarding guide for a GitHub repository.",
         "input_hint": "a GitHub repository URL",
         "run": generate_onboarding_guide,
     },
     "cve_impact": {
+        "input_kind": "repo",
         "description": "Analyzes a GitHub repository's dependencies for known CVEs and security risk.",
         "input_hint": "a GitHub repository URL",
         "run": analyze_cve_impact,
     },
     "issue_fix_planner": {
+        "input_kind": "issue",
         "description": "Creates a non-code implementation plan for a GitHub issue.",
         "input_hint": "a GitHub issue URL",
         "run": run_issue_fix_planner,
     },
     "do_i_care": {
+        "input_kind": "text",
         "description": "Scores a batch of news headlines for relevance and explains why they matter.",
         "input_hint": "one or more headlines separated by ';'",
         "run": _run_do_i_care,
     },
     "opportunity_scout": {
+        "input_kind": "user",
         "description": "Finds skill gaps, job suggestions, and a project idea for a GitHub user.",
         "input_hint": "a GitHub username",
         "run": run_opportunity_scout,
     },
     "security_audit": {
+        "input_kind": "repo",
         "description": (
             "Full security audit for a repo: combines onboarding + CVE analysis into one report. "
             "Prefer this over picking repo_onboarding and cve_impact separately."
@@ -78,18 +101,41 @@ SPECIALISTS = {
 }
 
 
-def _input_matches_task(spec_input: str, task: str) -> bool:
+def _text_overlaps_task(spec_input: str, task: str) -> bool:
     """
-    Sanity-check that a tool call's input is actually grounded in the user's own task text, rather
-    than a target the model picked up from an earlier tool result (e.g. a prompt injection attempt
-    embedded in fetched repo/issue content tricking it into targeting something else).
+    Fuzzy check for free-text inputs (a blog topic, headlines): most of the input's words must
+    appear in the task. This is weak by nature and used only where there is no identifier to match
+    exactly; the cost of a wrong guess is a web search or a scoring call, not a fetch of some
+    other repo or user.
     """
+    if spec_input.strip().lower() in ("", "trending"):
+        return True  # blog_scout's own default when the task names no topic
     task_lower = task.lower()
     tokens = [t for t in re.split(r"[^a-z0-9]+", spec_input.lower()) if len(t) >= 3]
     if not tokens:
-        return True  # nothing meaningful to check (e.g. a bare "trending")
+        return True  # nothing meaningful to check
     matched = sum(1 for t in tokens if t in task_lower)
     return matched / len(tokens) >= 0.6
+
+
+def _is_grounded(kind: str, spec_input: str, sources: list[str]) -> bool:
+    """
+    True if the target in `spec_input` is one the user themselves named in `sources` (their task
+    text, and inputs already accepted earlier in their session).
+
+    Repos, issues and users are compared exactly on parsed identifiers, so a lookalike such as
+    github.com/other/thing, or a repo whose name merely shares words with the task, is refused.
+    """
+    if kind == "repo":
+        ref = parse_repo_ref(spec_input)
+        return ref is not None and any(ref in extract_repo_refs(s) for s in sources)
+    if kind == "issue":
+        ref = parse_issue_ref(spec_input)
+        return ref is not None and any(ref in extract_issue_refs(s) for s in sources)
+    if kind == "user":
+        name = parse_username(spec_input)
+        return name is not None and any(name in extract_usernames(s) for s in sources)
+    return _text_overlaps_task(spec_input, sources[0])  # free text: checked against the task only
 
 
 RECALL_TOOL_NAME = "recall_memory"
@@ -104,11 +150,16 @@ def _make_specialist_tool(name: str, spec: dict, cache, session, on_event) -> To
 
     def _validate(args: dict, task: str) -> bool:
         spec_input = args.get("input", "")
-        # An input the user already ran earlier in this session was itself grounded in one of their
-        # tasks, so follow-ups like "do the same again" can reuse it without repeating the URL.
-        if session is not None and session.has_input(spec_input):
-            return True
-        return _input_matches_task(spec_input, task)
+        if not isinstance(spec_input, str):
+            return False
+        kind = spec.get("input_kind", "text")
+        if kind == "text":
+            # Re-running an exact input from earlier in this session is fine for follow-ups.
+            return (session is not None and session.has_input(spec_input)) or _is_grounded(kind, spec_input, [task])
+        # Inputs recorded earlier in this session were typed by the user or passed this same check,
+        # so follow-ups like "audit that repo too" can reuse them without repeating the URL.
+        sources = [task] + (session.inputs() if session is not None else [])
+        return _is_grounded(kind, spec_input, sources)
 
     return Tool(
         name=name,
@@ -170,7 +221,9 @@ def run_orchestrator(task: str, on_event=None, session=None, cache=None) -> dict
 
     Returns:
         A dict with:
-        - report: synthesized Markdown report
+        - report: synthesized Markdown report, with images removed and links limited to URLs the user
+          named or that appeared in a tool result's structured URL fields (see core.safe_markdown)
+        - sources: the URLs the report's links were checked against
         - specialists_used: list of {"specialist": name, "input": extracted input}
         - used_memory: True if the model consulted session memory via `recall_memory`
         - status: "success" or "error"
@@ -184,13 +237,20 @@ def run_orchestrator(task: str, on_event=None, session=None, cache=None) -> dict
     logger.info(f"Running orchestrator harness for task: {task}")
 
     try:
-        result = run_harness(
-            task=task,
-            tools=build_tools(cache, session, on_event),
-            system_prompt=HARNESS_SYSTEM_PROMPT,
-            max_steps=3,
-            on_event=on_event,
-        )
+        # Bounds the model calls this run can trigger in total, including those inside specialists.
+        # If the caller (e.g. the UI) already opened a scope, that one is used instead.
+        with request_scope(max_calls=get_budget().limits.orchestrator_request_calls):
+            result = run_harness(
+                task=task,
+                tools=build_tools(cache, session, on_event),
+                system_prompt=HARNESS_SYSTEM_PROMPT,
+                max_steps=3,
+                max_tool_calls=MAX_TOOL_CALLS,
+                on_event=on_event,
+            )
+    except BudgetExceededError as e:
+        logger.warning(f"Orchestrator stopped by usage limit ({e.scope}): {e}")
+        return {"error_message": str(e), "status": "error"}
     except RuntimeError as e:
         logger.error(f"Harness unavailable: {e}")
         return {"error_message": str(e), "status": "error"}
@@ -210,8 +270,8 @@ def run_orchestrator(task: str, on_event=None, session=None, cache=None) -> dict
         return {
             "error_message": (
                 "The routing decision picked a target that doesn't appear in your task text, so it was "
-                "blocked as a precaution. Please rephrase your task to clearly include the target "
-                "(repo URL, GitHub username, issue URL, or topic)."
+                "blocked as a precaution. Please include the target explicitly: the full GitHub repo or "
+                "issue URL, or a username written as '@name' or 'GitHub user name'."
             ),
             "status": "error",
         }
@@ -220,8 +280,18 @@ def run_orchestrator(task: str, on_event=None, session=None, cache=None) -> dict
         {"specialist": c["tool"], "input": c["args"].get("input", "")} for c in specialist_calls
     ]
 
+    # The report is model output shaped by fetched (untrusted) content. Keep only links to URLs the
+    # user named, or that appear in a structured URL field of a tool result; drop images and defang
+    # everything else. Free text inside tool results is deliberately not a source of allowed URLs.
+    allowed = urls_in_text(task)
+    if session is not None:
+        for earlier_input in session.inputs():
+            allowed |= urls_in_text(earlier_input)
+    allowed |= collect_urls([c["output"] for c in specialist_calls])
+
     return {
-        "report": result.final_message,
+        "report": sanitize_markdown(result.final_message, allowed),
+        "sources": sorted(allowed)[:100],
         "specialists_used": specialists_used,
         "used_memory": len(specialist_calls) < len(result.tool_calls),
         "status": "success",

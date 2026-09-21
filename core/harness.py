@@ -15,12 +15,16 @@ from dataclasses import dataclass, field
 from typing import Callable, Optional
 
 from dotenv import load_dotenv
-from openai import OpenAI
+
+from core.llm import guarded_completion, make_client
+from core.llm_utils import wrap_untrusted
 
 logger = logging.getLogger(__name__)
 
 DEFAULT_MODEL = "gpt-4o-mini"
 DEFAULT_MAX_STEPS = 4
+DEFAULT_MAX_TOOL_CALLS = 4
+MAX_TOOL_RESULT_CHARS = 4000
 
 
 @dataclass
@@ -46,6 +50,18 @@ class Tool:
         }
 
 
+def _tool_message_content(output) -> str:
+    """
+    A tool's output as the model sees it: wrapped as untrusted data (tool results carry text fetched
+    from repos, issues and the web), and cut at MAX_TOOL_RESULT_CHARS with a visible marker so the
+    model knows the JSON was truncated rather than reading a silently broken document.
+    """
+    text = json.dumps(output, default=str)
+    if len(text) > MAX_TOOL_RESULT_CHARS:
+        text = text[:MAX_TOOL_RESULT_CHARS] + f"\n... [truncated: {len(text) - MAX_TOOL_RESULT_CHARS} more characters]"
+    return wrap_untrusted(text)
+
+
 @dataclass
 class HarnessResult:
     final_message: str
@@ -58,6 +74,7 @@ def run_harness(
     tools: list[Tool],
     system_prompt: str,
     max_steps: int = DEFAULT_MAX_STEPS,
+    max_tool_calls: int = DEFAULT_MAX_TOOL_CALLS,
     model: str = DEFAULT_MODEL,
     on_event: Optional[Callable[[str, dict], None]] = None,
 ) -> HarnessResult:
@@ -67,13 +84,18 @@ def run_harness(
     Each step, the model sees the conversation so far (including prior tool results) and either
     calls one or more tools or returns a final answer. The harness executes each requested call,
     isolates failures per-call so one bad tool doesn't abort the run, and feeds results back for
-    the next step. Stops when the model returns a plain answer (no tool calls) or `max_steps` is
-    reached, in which case the model is asked for a best-effort final answer using only what it
-    already gathered.
+    the next step. Stops when the model returns a plain answer (no tool calls), or when `max_steps`
+    or `max_tool_calls` is reached, in which case the model is asked for a best-effort final answer
+    using only what it already gathered.
+
+    `max_tool_calls` caps the total number of tool calls attempted across the whole run, however
+    many the model requests per step: calls past the cap are not executed (the model is told so).
+    Every model call goes through core.llm.guarded_completion, so spend limits apply, and a
+    BudgetExceededError propagates to the caller.
 
     `on_event`, if given, is called synchronously as the loop progresses - e.g. to drive a live
     UI (a Streamlit st.status block). Events: "tool_call_start" {tool, args}, "tool_call_end"
-    {tool, args, output}, "step_limit_reached" {}, "final" {message}.
+    {tool, args, output}, "step_limit_reached" {}, "tool_limit_reached" {}, "final" {message}.
     """
     def emit(event: str, payload: dict) -> None:
         if on_event is not None:
@@ -83,7 +105,7 @@ def run_harness(
     if not api_key:
         raise RuntimeError("OpenAI backend unavailable. Ensure OPENAI_API_KEY is set in environment.")
 
-    client = OpenAI(api_key=api_key)
+    client = make_client(api_key)
     tool_map = {t.name: t for t in tools}
     tool_schemas = [t.to_openai_schema() for t in tools]
 
@@ -93,12 +115,20 @@ def run_harness(
     ]
     call_log: list = []
 
+    tool_limit_hit = False
+    steps_taken = 0
     for step in range(1, max_steps + 1):
-        response = client.chat.completions.create(
+        if len(call_log) >= max_tool_calls:
+            tool_limit_hit = True
+            break
+        steps_taken = step
+        response = guarded_completion(
+            client,
             model=model,
             messages=messages,
             tools=tool_schemas,
             tool_choice="auto",
+            parallel_tool_calls=False,
             temperature=0.3,
         )
         msg = response.choices[0].message
@@ -124,6 +154,19 @@ def run_harness(
 
         for tc in msg.tool_calls:
             name = tc.function.name
+
+            if len(call_log) >= max_tool_calls:
+                # Still answer the call so the message history stays valid, but don't run it.
+                logger.warning(f"Skipped call to '{name}': tool call limit ({max_tool_calls}) reached")
+                messages.append(
+                    {
+                        "role": "tool",
+                        "tool_call_id": tc.id,
+                        "content": json.dumps({"error": f"Not executed: the limit of {max_tool_calls} tool calls was reached."}),
+                    }
+                )
+                continue
+
             try:
                 args = json.loads(tc.function.arguments or "{}")
             except json.JSONDecodeError:
@@ -150,19 +193,19 @@ def run_harness(
                 {
                     "role": "tool",
                     "tool_call_id": tc.id,
-                    "content": json.dumps(output, default=str)[:4000],
+                    "content": _tool_message_content(output),
                 }
             )
 
-    emit("step_limit_reached", {})
+    emit("tool_limit_reached" if tool_limit_hit or len(call_log) >= max_tool_calls else "step_limit_reached", {})
     messages.append(
         {
             "role": "user",
-            "content": "Step limit reached. Give your best final answer now, using only the tool "
+            "content": "Tool or step limit reached. Give your best final answer now, using only the tool "
             "results already gathered above - do not call any more tools.",
         }
     )
-    response = client.chat.completions.create(model=model, messages=messages, temperature=0.3)
+    response = guarded_completion(client, model=model, messages=messages, temperature=0.3)
     final_message = response.choices[0].message.content or ""
     emit("final", {"message": final_message})
-    return HarnessResult(final_message=final_message, tool_calls=call_log, steps_used=max_steps)
+    return HarnessResult(final_message=final_message, tool_calls=call_log, steps_used=steps_taken)

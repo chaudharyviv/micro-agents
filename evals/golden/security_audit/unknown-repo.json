@@ -1,0 +1,10 @@
+{
+  "agent": "security_audit",
+  "id": "unknown-repo",
+  "input": "https://github.com/nonexistent-owner-zz9/no-such-repo-zz9",
+  "recorded_at": "2026-09-21T05:31:25+00:00",
+  "output": {
+    "error_message": "Repository not found: https://github.com/nonexistent-owner-zz9/no-such-repo-zz9",
+    "repo_url": "https://github.com/nonexistent-owner-zz9/no-such-repo-zz9"
+  }
+}

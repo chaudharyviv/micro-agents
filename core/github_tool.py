@@ -7,6 +7,8 @@ import time
 import requests
 from dotenv import load_dotenv
 
+from core.targets import USERNAME_RE
+
 logger = logging.getLogger(__name__)
 
 
@@ -24,6 +26,24 @@ _RATE_LIMIT_FLOOR = 2
 # needs, so if one is misconfigured we want a visible warning rather than silent over-privilege.
 _EXPECTED_TOKEN_SCOPES = {"public_repo", ""}
 _token_scope_checked = False
+
+
+# Limits on what fetch_repo hands to downstream prompts.
+_MAX_TREE_ENTRIES = 100
+_MAX_MANIFESTS = 4
+_MAX_MANIFEST_CHARS = 8000
+MANIFEST_FILES = {
+    "requirements.txt",
+    "pyproject.toml",
+    "Pipfile",
+    "package.json",
+    "go.mod",
+    "Cargo.toml",
+    "Gemfile",
+    "pom.xml",
+    "build.gradle",
+    "composer.json",
+}
 
 
 class GitHubAPIError(Exception):
@@ -115,17 +135,45 @@ def _parse_pr_url(url: str) -> tuple[str, str, int]:
     return match.group(1), match.group(2), int(match.group(3))
 
 
+def _format_file_tree(files: list[dict]) -> str:
+    """Render the top-level listing as one entry per line, directories suffixed with '/'."""
+    lines = [f["name"] + ("/" if f["type"] == "dir" else "") for f in files[:_MAX_TREE_ENTRIES]]
+    if len(files) > _MAX_TREE_ENTRIES:
+        lines.append(f"... ({len(files) - _MAX_TREE_ENTRIES} more)")
+    return "\n".join(lines)
+
+
+def _fetch_manifests(owner: str, repo: str, files: list[dict], headers: dict) -> dict[str, str]:
+    """Fetch raw content of top-level dependency manifests. Failures are non-fatal."""
+    manifests: dict[str, str] = {}
+    names = [f["name"] for f in files if f["type"] == "file" and f["name"] in MANIFEST_FILES]
+    for name in names[:_MAX_MANIFESTS]:
+        try:
+            resp = requests.get(
+                f"{GITHUB_API_BASE}/repos/{owner}/{repo}/contents/{name}",
+                headers={**headers, "Accept": "application/vnd.github.v3.raw"},
+                timeout=10,
+            )
+            if resp.status_code == 200:
+                manifests[name] = resp.text[:_MAX_MANIFEST_CHARS]
+        except Exception as e:
+            logger.warning(f"Could not fetch manifest {name} for {owner}/{repo}: {e}")
+    return manifests
+
+
 def fetch_repo(url: str) -> dict:
     """
     Fetch repository metadata from GitHub.
 
-    Includes repo info, README content, and top-level file tree.
+    Includes repo info, README content, top-level file tree, and dependency manifests.
 
     Args:
         url: The GitHub repository URL (e.g., https://github.com/owner/repo)
 
     Returns:
-        A dict with keys: name, owner, description, url, readme, files
+        A dict with keys: name, owner, description, url, language, stars, readme,
+        files (list of {name, type, size}), file_tree (newline-separated string, dirs end in '/'),
+        manifests (dict of top-level manifest filename -> raw content)
 
     Raises:
         GitHubAPIError: On 404, rate limit, or invalid URL
@@ -145,10 +193,14 @@ def fetch_repo(url: str) -> dict:
         result = {
             "name": repo_data["name"],
             "owner": repo_data["owner"]["login"],
-            "description": repo_data.get("description", ""),
+            "description": repo_data.get("description") or "",
             "url": repo_data["html_url"],
+            "language": repo_data.get("language") or "Unknown",
+            "stars": repo_data.get("stargazers_count", 0),
             "readme": "",
             "files": [],
+            "file_tree": "",
+            "manifests": {},
         }
 
         # Fetch README
@@ -180,6 +232,9 @@ def fetch_repo(url: str) -> dict:
         except Exception:
             pass  # Contents fetch failure is non-fatal
 
+        result["file_tree"] = _format_file_tree(result["files"])
+        result["manifests"] = _fetch_manifests(owner, repo, result["files"], headers)
+
         return result
 
     except requests.exceptions.HTTPError as e:
@@ -192,6 +247,85 @@ def fetch_repo(url: str) -> dict:
     except Exception as e:
         logger.error(f"Unexpected error fetching repo: {e}")
         raise GitHubAPIError("Failed to fetch repository. Please try again.")
+
+
+_USERNAME_RE = USERNAME_RE
+_MAX_USER_REPOS = 100
+
+
+def fetch_user_profile(username: str) -> dict:
+    """
+    Fetch a GitHub user's public profile and their most recently pushed public repositories.
+
+    Forks are excluded from `repos`, since they aren't the user's own work.
+
+    Args:
+        username: A GitHub username (not a URL)
+
+    Returns:
+        A dict with keys: login, name, bio, public_repos (total on the account), repos_fetched
+        (how many were listed, before excluding forks), forks_excluded, and repos: a list of
+        {name, description, language, stars, topics, pushed_at, archived}.
+
+    Raises:
+        GitHubAPIError: On invalid username, unknown user, or rate limit
+    """
+    username = (username or "").strip().lstrip("@")
+    if not _USERNAME_RE.match(username):
+        raise GitHubAPIError(f"Invalid GitHub username: {username!r}")
+
+    headers = _get_headers()
+    _check_rate_limit_budget()
+
+    try:
+        user_resp = requests.get(f"{GITHUB_API_BASE}/users/{username}", headers=headers, timeout=10)
+        _record_rate_limit(user_resp)
+        user_resp.raise_for_status()
+        user = user_resp.json()
+
+        repos_resp = requests.get(
+            f"{GITHUB_API_BASE}/users/{username}/repos",
+            params={"type": "owner", "sort": "pushed", "per_page": _MAX_USER_REPOS},
+            headers=headers,
+            timeout=10,
+        )
+        _record_rate_limit(repos_resp)
+        repos_resp.raise_for_status()
+        listed = repos_resp.json()
+
+        repos = [
+            {
+                "name": r["name"],
+                "description": r.get("description") or "",
+                "language": r.get("language") or "",
+                "stars": r.get("stargazers_count", 0),
+                "topics": r.get("topics", []),
+                "pushed_at": r.get("pushed_at") or "",
+                "archived": bool(r.get("archived")),
+            }
+            for r in listed
+            if not r.get("fork")
+        ]
+        return {
+            "login": user["login"],
+            "name": user.get("name") or "",
+            "bio": user.get("bio") or "",
+            "public_repos": user.get("public_repos", 0),
+            "repos_fetched": len(listed),
+            "forks_excluded": len(listed) - len(repos),
+            "repos": repos,
+        }
+
+    except requests.exceptions.HTTPError as e:
+        if e.response.status_code == 404:
+            raise GitHubAPIError(f"GitHub user not found: {username}")
+        elif e.response.status_code == 403:
+            raise GitHubAPIError("GitHub rate limit exceeded")
+        logger.error(f"GitHub API error fetching user: {e}")
+        raise GitHubAPIError("GitHub API error. Please try again.")
+    except Exception as e:
+        logger.error(f"Unexpected error fetching user: {e}")
+        raise GitHubAPIError("Failed to fetch GitHub user. Please try again.")
 
 
 def fetch_issue(url: str) -> dict:
